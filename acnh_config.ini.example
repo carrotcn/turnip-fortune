@@ -1,0 +1,9 @@
+[CAP_N_OCR]
+price_threshold = 550
+tessdata_dir = C:\Program Files\Tesseract-OCR\tessdata
+tesseract_cmd = C:\Program Files\Tesseract-OCR\tesseract.exe
+cap_dir = d:\Documents\cap
+com_port = COM4
+GMAIL_NOTIFICATION_USR = robot_e9dc4r@gmail.com
+GMAIL_NOTIFICATION_PWD = @VeryStrongPassw0rd!
+DEV_MAIL_RECIPIENT = user_e9dc4r@ProtonMail.com
