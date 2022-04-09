@@ -57,7 +57,7 @@ def sendMail(to, subject, body = None, attachment_path_list = None):
     msg = MIMEMultipart()
 
     msg['Subject'] = subject
-    msg['From'] = 'rpi@carrotcn.com'
+    msg['From'] = config['GMAIL_NOTIFICATION_USR']
     msg['To'] = to
 
     msg.attach(MIMEText(body, "plain"))
@@ -148,7 +148,7 @@ while(True):
 
     #Reload config file
     config_main = configparser.ConfigParser()
-    config_main.read(os.sep.join([os.path.dirname(os.path.realpath(__file__)),'rn_py_config.ini']))
+    config_main.read(os.sep.join([os.path.dirname(os.path.realpath(__file__)),'acnh_config.ini']))
     if config_main.has_section('CAP_N_OCR'):
         config = config_main['CAP_N_OCR']
     else:
