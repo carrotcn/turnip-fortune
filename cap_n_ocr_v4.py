@@ -119,11 +119,11 @@ def cchandler(signal_received, frame):
 signal(SIGINT, cchandler)
 
 config_main = configparser.ConfigParser()
-config_main.read(os.sep.join([os.path.dirname(os.path.realpath(__file__)),'rn_py_config.ini']))
+config_main.read(os.sep.join([os.path.dirname(os.path.realpath(__file__)),'acnh_config.ini']))
 if config_main.has_section('CAP_N_OCR'):
     config = config_main['CAP_N_OCR']
 else:
-    print('rn_py_config.ini not found!!! Exiting...')
+    print('acnh_config.ini not found!!! Exiting...')
     sys.exit(0)
 
 tessdata_dir_config = '--tessdata-dir "' + config['TESSDATA_DIR'] + '"'
@@ -152,7 +152,7 @@ while(True):
     if config_main.has_section('CAP_N_OCR'):
         config = config_main['CAP_N_OCR']
     else:
-        print('rn_py_config.ini not found!!! Exiting...')
+        print('acnh_config.ini not found!!! Exiting...')
         sys.exit(0)
     #Reload the command list file so that any changes can be adopted without a restart
     command_list_g1.clear()
