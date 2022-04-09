@@ -126,7 +126,7 @@ else:
     print('acnh_config.ini not found!!! Exiting...')
     sys.exit(0)
 
-tessdata_dir_config = '--tessdata-dir "' + config['TESSDATA_DIR'] + '"'
+tessdata_dir_config = r'--tessdata-dir "' + config['TESSDATA_DIR'] + r'"'
 pytesseract.pytesseract.tesseract_cmd = config['TESSERACT_CMD']
 
 command_list_g1, command_list_g2, command_list_g3, command_list_g4 = [], [], [], []
@@ -239,7 +239,7 @@ while(True):
                 img = img.crop((0,50,320,100))
                 filename = os.sep.join([config['CAP_DIR'],'cap_succ_crop_' + str(int(time.time())) + '.jpg'])
                 img.save(filename)
-                text = re.compile(r'(\r+|\n+|\s+)').sub('',pytesseract.image_to_string(img,lang='acnh'),config=tessdata_dir_config)
+                text = re.compile(r'(\r+|\n+|\s+)').sub('',pytesseract.image_to_string(img,lang='acnh',config=tessdata_dir_config))
                 #text = pytesseract.image_to_string(img,lang='acnh').replace('\r','').replace('\n','')
                 
                 #winsound.Beep(2500, 500)                
