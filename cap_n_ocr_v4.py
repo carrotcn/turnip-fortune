@@ -20,6 +20,7 @@ import base64
 
 import serial
 import configparser
+import logging
 
 import platform
 import smtplib
@@ -143,6 +144,8 @@ print('<COM port opened. Switching controller...>')
 ser.write(b'^') 
 time.sleep(20)
 
+rescue_count = 0
+
 while(True):
     #winsound.Beep(2500, 100)
 
@@ -199,11 +202,18 @@ while(True):
             break
         #Must have bumped into a dialogue with someone
         if homeAttempt >= 200: 
+            #something is really wrong (e.g., stuck in conversation to give nickname)
+            if rescue_count > 3:
+                print(str(time.ctime()), 'Not getting anywhere...exiting...')
+                sendMail(config['DEV_MAIL_RECIPIENT'],'Not getting anywhere...exiting...',str(time.ctime()))
+                bgd_capture.close()
+                sys.exit(0)
             print(str(time.ctime()), 'Unable to get home state! Self rescue triggered...')
             sendMail(config['DEV_MAIL_RECIPIENT'],'Oops... Self rescue triggered...',str(time.ctime()))
             for _ in range(200):
                 trigger_action(ser,'B')
                 time.sleep(0.25)
+            rescue_count += 1
 
     time.sleep(1)
     iCount = 0
@@ -252,6 +262,7 @@ while(True):
                 print(str(time.ctime()), text, '|', strPrice)
                 with open(os.sep.join([config['CAP_DIR'],'cap_price_log.txt']), 'a') as f:
                     f.write(str(time.ctime()) + '; ' + strPrice + '\n')
+                rescue_count = 0
                 if int(strPrice) >= int(config['PRICE_THRESHOLD']):
                     winsound.Beep(3200, 5000)
                     #pullPlug()
