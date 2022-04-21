@@ -1,3 +1,4 @@
+from ast import While
 import time
 import pytesseract
 import traceback
@@ -27,6 +28,10 @@ import re
 import cv2
 import numpy
 from skimage.metrics import structural_similarity as ssim
+
+from colormath.color_objects import sRGBColor, LabColor
+from colormath.color_conversions import convert_color
+from colormath.color_diff import delta_e_cie2000
 
 #from matplotlib import pyplot as plt
 
@@ -115,7 +120,6 @@ def sendMsg(i_quanquan_capture, msg):
 
 def getOCR(filename, language_type='CHN_ENG'):
     try:
-        # client_id 为官网获取的AK， client_secret 为官网获取的SK
         host = 'https://aip.baidubce.com/oauth/2.0/token?grant_type=client_credentials' + \
             '&client_id=' + config['baidu_ocr_client_id'] + \
             '&client_secret=' + config['baidu_ocr_client_secret']
@@ -128,7 +132,7 @@ def getOCR(filename, language_type='CHN_ENG'):
         #print(parsed_json['access_token'])
 
         request_url = "https://aip.baidubce.com/rest/2.0/ocr/v1/general_basic"
-        # 二进制方式打开图片文件
+        
         f = open(filename, 'rb')
         img = base64.b64encode(f.read())
 
@@ -151,8 +155,8 @@ def getOCR(filename, language_type='CHN_ENG'):
 
     except Exception as x:
         strExcDtl = traceback.format_exc()
-        print('[EXCEPTION!!!!!!!!!!]')
-        print(strExcDtl)
+        logger.error('Baidu OCR failed!!!')
+        logger.error(strExcDtl)
 
 def sendMail(to, subject, body=None, attachment_path_list=None):
     msg = MIMEMultipart()
@@ -187,9 +191,9 @@ def sendMail(to, subject, body=None, attachment_path_list=None):
         server.sendmail(config['GMAIL_NOTIFICATION_USR'], to.split(','), text)
         server.close()
 
-        print('Email sent!')
+        logger.info('Email sent!')
     except Exception as x:
-        print('[ERROR] ' + time.ctime() + ': Exception:', x)
+        logger.error(str(x))
 
 def trigger_action(ser, *buttons, sec=0.1):
     if not buttons:
@@ -216,12 +220,12 @@ def getConfig():
     if config_main.has_section('REOPEN_ISLAND'):
         return config_main['REOPEN_ISLAND']
     else:
-        print('acnh_config.ini not found!!! Exiting...')
+        logger.info('acnh_config.ini not found!!! Exiting...')
         sys.exit(0)
 
 def cchandler(signal_received, frame):
     # Handle any cleanup here
-    print('SIGINT or CTRL-C detected. Giving back controller...')
+    logger.info('SIGINT or CTRL-C detected. Giving back controller...')
     for action, duration in command_list_g4:
         trigger_action(ser, *action, sec=duration)
     exit(0)
@@ -332,7 +336,36 @@ def getSysTime():
     trigger_action(ser, 'HOME')
     time.sleep(2)
     return strText if strText is not None else ''
-    
+
+def isSimilarColor(color1, color2):
+    THRESHOLD = 5
+    # Red Color
+    color1_rgb = sRGBColor(color1[0], color1[1], color1[2])
+
+    # Blue Color
+    color2_rgb = sRGBColor(color2[0], color2[1], color2[2])
+
+    # Convert from RGB to Lab Color Space
+    color1_lab = convert_color(color1_rgb, LabColor)
+
+    # Convert from RGB to Lab Color Space
+    color2_lab = convert_color(color2_rgb, LabColor)
+
+    # Find the color difference
+    delta_e = delta_e_cie2000(color1_lab, color2_lab)
+
+    return True if delta_e < THRESHOLD else False
+
+def hasInternet():
+    url = "http://www.google.com"
+    timeout = 5
+    try:
+        request = requests.get(url, timeout=timeout)
+        logger.debug("Connected to the Internet")
+        return True
+    except (requests.ConnectionError, requests.Timeout) as exception:
+        logger.debug("No internet connection.")
+        return False
 #############################################################################
 signal(SIGINT, cchandler)
 
@@ -352,7 +385,7 @@ logger.setLevel(logging.DEBUG)
 
 # create console handler and set level to debug
 ch1 = logging.StreamHandler()
-ch1.setLevel(logging.INFO)
+ch1.setLevel(logging.DEBUG)
 ch2 = logging.FileHandler(filename=os.sep.join([config['CAP_DIR'],'visitors','cap_visitor_log.txt']), mode='a', encoding='utf-8')
 ch2.setLevel(logging.INFO)
 ch3 = CustomLogHandler()
@@ -434,9 +467,13 @@ while True:
     time.sleep(0.2)
     img_full = bgd_capture.getIM()
     img = img_full.crop((1036, 550, 1195, 708))
+    # filename_tmp = os.sep.join([config['CAP_DIR'],'test','cap_flip_' + str(int(time.time())) + '.jpg'])
+    # img.save(filename_tmp)
     pixelcolor1 = img.getpixel((35, 63))
     pixelcolor2 = img.getpixel((84, 110))
-    if pixelcolor1 == (51, 50, 51) and pixelcolor2 == (34, 141, 197):
+    color_ref1 = (51, 50, 51)
+    color_ref2 = (34, 141, 197)
+    if isSimilarColor(pixelcolor1,color_ref1) and isSimilarColor(pixelcolor2,color_ref2):
         time.sleep(5) #wait for the flipping anime
         img = bgd_capture.getIM().crop((360, 271, 1191, 367)).convert('L').point(fn, mode='1')
         filename = os.sep.join([config['CAP_DIR'],'visitors','cap_visitor_' + str(int(time.time())) + '.jpg'])
@@ -448,16 +485,34 @@ while True:
             l_t1 = time.monotonic()
             sendMsg(quanquan_capture, u'[喵] 侦测到进港航班：' + strPlayerName + u' （飞行中会“正忙”，请稍候...)')
 
+        # This is to resolve the occasional color flickering from the capture card.
+        # Basically we try a few more times before concluding the arrival of the flight
+        diffColorCount = 0
         while True:
             img = bgd_capture.getIM().crop((1036, 550, 1195, 708))
             pixelcolor1 = img.getpixel((35, 63))
             pixelcolor2 = img.getpixel((84, 110))
-            if pixelcolor1 == (51, 50, 51) and pixelcolor2 == (34, 141, 197):
-                time.sleep(0.5)
+            color_ref1 = (51, 50, 51)
+            color_ref2 = (34, 141, 197)
+            if isSimilarColor(pixelcolor1,color_ref1) and isSimilarColor(pixelcolor2,color_ref2):
+                diffColorCount = 0
+                time.sleep(2)
                 continue
+            else:
+                diffColorCount += 1
+                time.sleep(0.5)
+                if diffColorCount <= 3:
+                    continue
+            
+            # filename_tmp = os.sep.join([config['CAP_DIR'],'test','cap_flip_' + str(int(time.time())) + '.jpg'])
+            # img.save(filename_tmp)
+
             if config['quanquan_announce_traffic'] == 'yes':
                 sendMsg(quanquan_capture, u'[喵] ' + strPlayerName + u' 已落地，用时'
                     + str(int(time.monotonic() - l_t1) + 5) + u'秒。下一位旅客请尝试登机')
+            # this is to avoid the next main iteration captures prematurely the fading animation
+            # of the airport flip board after the flight arrival
+            time.sleep(2)
             break
     #"Network Error" within ACNH
     cv2_img = cv2.cvtColor(numpy.array(img), cv2.COLOR_BGR2GRAY)
@@ -499,8 +554,16 @@ while True:
             time.sleep(5)#to avoid capturing the same message
             break
         continue
+    
+    logger.error('Connection terminated from ACNH server!!!')
+    while(True):
+        logger.debug('Checking internet connection...')
+        if hasInternet():
+            break
+        else:
+            logger.debug('No internet connection. Try again in 30 seconds.')
+            time.sleep(30)
 
-    logger.error('Network error detected! Heading to the gate...')
     if config['quanquan_enabled'] == 'yes':
         sendMsg(quanquan_capture, u'[喵] 炸啦~炸啦~岛炸啦~~密码失效啦~~飞奔向机场重开ing...')
     
@@ -531,6 +594,9 @@ while True:
     #we need this dynamic determination because the loading screen after a disconnect
     #varies. We continue only after confirming the character is at the door outside of the
     #airport.
+    logger.info('Waiting for evacuation from the airport...')
+    
+    # See if the screen lights up again
     while True:
         img = bgd_capture.getIM().crop((625, 305, 630, 310)) \
             .convert('L').point(lambda x: 255 if x > 30 else 0, mode='1')
@@ -540,6 +606,26 @@ while True:
             time.sleep(0.1)
             continue
         break
+    
+    # Okay the screen lit up. But are we really outside of the airport?
+    # In case of persistent network issue, there will be additonal pop up at OS level.
+    # Therefore we seek for the frame of the mini map here to make sure 
+    # that we are still within the game
+    time.sleep(5)
+    img = bgd_capture.getIM().crop((990,550,993,700))
+    pixelcolor1 = img.getpixel((0,0))
+    pixelcolor2 = img.getpixel((0,50))
+    pixelcolor3 = img.getpixel((0,100))
+    pixelcolor4 = img.getpixel((0,149))
+    color_ref = (254, 251, 230)
+    if not isSimilarColor(pixelcolor1,color_ref) \
+        == isSimilarColor(pixelcolor2,color_ref) \
+        == isSimilarColor(pixelcolor3,color_ref) \
+        == isSimilarColor(pixelcolor4,color_ref) \
+        == True:
+        logger.critical('Character is lost in the airport. Exiting to prevent further damage...')
+        sys.exit(0)
+
     #Reload the command list file so that any changes can be adopted without a restart
     command_list_g1.clear()
     command_list_g4.clear()
@@ -552,13 +638,14 @@ while True:
                 command_list_g1.append(command_struc)
             elif group == '4':
                 command_list_g4.append(command_struc) #release the controller
+    logger.debug('Starting g1.')
     for action, duration in command_list_g1:
         trigger_action(ser, *action, sec=duration)
     img = bgd_capture.getIM().crop((300, 520, 520, 620)).convert('L').point(fn, mode='1')
     logger.info('DODO code captured.')
     img = img.crop((0, 50, 220, 100))
     text = pytesseract.image_to_string(img, lang='dodo',config=tessdata_dir_config)
-    #print('Original OCR:',text)
+    logger.debug('Original OCR:' + str(text))
     body = text + '\r\n'
     #text = re.compile(r'(“+|”+|"+|\s+)').sub('', text)
     text = re.compile(r'([^a-zA-Z0-9])').sub('', text)
@@ -570,6 +657,7 @@ while True:
     if len(text) != 5:
         logger.warning('Local OCR failed. Falling back to Baidu OCR.')
         text = re.compile(r'([^a-zA-Z0-9])').sub('', getOCR(filename,'ENG').replace('O','0'))
+        logger.debug('Calibrated Baidu OCR output:' + text)
         body = body + 'Local OCR failed. Falling back to Baidu OCR.'
 
     body = str(time.ctime()) + '\r\n' + body + text
@@ -599,7 +687,7 @@ while True:
     trigger_action(ser, 'L_UP', sec=5)
 
     if config['interactive_mode'] == 'yes':
-        print('Interactive mode enabled. Giving back controller...')
+        logger.info('Interactive mode enabled. Giving back controller...')
         for action, duration in command_list_g4:
             trigger_action(ser, *action, sec=duration)
 
