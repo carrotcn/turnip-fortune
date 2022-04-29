@@ -1,6 +1,6 @@
 #start this program with the Switch OS main menu. 
 #ACNH should have been running in background with character in front of the house
-import time
+import time,datetime,calendar
 import pytesseract
 import traceback
 from PIL import Image
@@ -261,7 +261,10 @@ while(True):
                         break
                 print(str(time.ctime()), text, '|', strPrice)
                 with open(os.sep.join([config['CAP_DIR'],'cap_price_log.txt']), 'a') as f:
-                    f.write(str(time.ctime()) + '; ' + strPrice + '\n')
+                    f.write(';'.join((str(datetime.datetime.now().strftime(r'%m/%d/%Y')),
+                        str(datetime.datetime.now().strftime(r'%H:%M:%S')),
+                        str(calendar.timegm((datetime.datetime.now(datetime.timezone.utc)).timetuple())),
+                        strPrice)) + '\n')
                 rescue_count = 0
                 if int(strPrice) >= int(config['PRICE_THRESHOLD']):
                     winsound.Beep(3200, 5000)
@@ -274,6 +277,13 @@ while(True):
                     attachment_path_list = []
                     attachment_path_list.append(filename)
                     sendMail(config['DEV_MAIL_RECIPIENT'],'Turnip Price@'+strPrice,str(time.ctime()),attachment_path_list)
+                    
+                    config_temp = configparser.ConfigParser()
+                    config_temp['DODOApp'] = {}
+                    config_temp['DODOApp']['island_price'] = strPrice
+                    with open(os.sep.join([os.path.dirname(os.path.realpath(__file__)),'dodoapp_local_config.ini']), 'w') as configfile:
+                        config_temp.write(configfile)
+                    
                     bgd_capture.close()
                     sys.exit(0)
 

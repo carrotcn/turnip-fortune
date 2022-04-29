@@ -220,6 +220,7 @@ class DODOApp_API:
         dictParam_body['isPrivate'] = isPrivate
         dictParam_body['islandId'] = '10000'
         dictParam_body['marketChannel'] = 'official'
+        dictParam_body['maxRankLimit'] = '5'
         dictParam_body['packageName'] = 'com.dodolive.app' 
         dictParam_body['password'] = newDODO
         dictParam_body['price'] = price
@@ -375,6 +376,9 @@ class DODOApp_API:
             self.logger.error('delete failed.')
             strExcDtl = traceback.format_exc()
             self.logger.debug(strExcDtl)
+        
+        self.logger.info('Island closed. Exiting...')
+        sys.exit(0)
 
     def sendMsg(self,content):
         headers = self.__get_headers()

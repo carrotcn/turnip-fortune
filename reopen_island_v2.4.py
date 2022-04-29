@@ -156,11 +156,11 @@ class cl_DODOApp_cap(cl_xcx_cap):
         time.sleep(1)
         
         time.sleep(3)#wait for the page to get back to island detail
-        if newDODO is not None:
-            self.sendMsg(u'[喵] 呼...机场已恢复开放~请刷新页面获取最新密码~（趴...')
-        else:
-            #sendMsg(quanquan_capture, u'[喵] +3600s')
-            pass
+        # if newDODO is not None:
+        #     self.sendMsg(u'[喵] 呼...机场已恢复开放~请刷新页面获取最新密码~（趴...')
+        # else:
+        #     #sendMsg(quanquan_capture, u'[喵] +3600s')
+        #     pass
     
     def closeIsland(self):
         # For DODOApp we do not explicitly close the island.
@@ -265,11 +265,11 @@ class cl_quanquan_cap(cl_xcx_cap):
             sys.exit(0)
         pyautogui.click(x=left + ref_x, y=top + ref_y)
         time.sleep(5)#wait for the page to get back to island detail
-        if newDODO is not None:
-            self.sendMsg(self, u'[喵] 呼...机场已恢复开放~请刷新页面获取最新密码~（趴...')
-        else:
-            #self.sendMsg(self, u'[喵] +3600s')
-            pass
+        # if newDODO is not None:
+        #     self.sendMsg(self, u'[喵] 呼...机场已恢复开放~请刷新页面获取最新密码~（趴...')
+        # else:
+        #     #self.sendMsg(self, u'[喵] +3600s')
+        #     pass
         g_lastRestart = int(time.monotonic())
 
     def closeIsland(self):
@@ -308,38 +308,6 @@ class CustomLogHandler(logging.Handler):
         if '- CRITICAL -' in body:
             sendMail(config['DEV_MAIL_RECIPIENT'],'Reopen_island ABENDED!!!', body)
         return 0
-
-# def sendMsg(i_quanquan_capture, msg):
-#     mouse_x, mouse_y = pyautogui.position()
-#     i_quanquan_capture.showWindow()
-#     left, top = i_quanquan_capture.getPos()
-#     iCount = 0
-#     pyautogui.click(left + 7, top + 120)
-#     pyautogui.press('home')
-#     time.sleep(0.8)
-#     while True:
-#         ref_x, ref_y = i_quanquan_capture.getRefPos(os.sep.join([os.path.dirname(os.path.realpath(__file__)),'ref_img','btnSend.jpg']))
-#         if ref_x < 0 or ref_y < 0:                
-#             if iCount <= 2:
-#                 pyautogui.click(left + 7, top + 120)
-#                 pyautogui.press('pagedown')
-#                 time.sleep(0.5)
-#                 iCount += 1
-#                 continue
-#             else:
-#                 logger.critical('Send button not found!!! Exiting to prevent further damage...')
-#                 sys.exit(0)
-#         break
-#     pyautogui.click(x=left + ref_x - 200, y=top + ref_y + 10)
-#     #we cannot use pyautogui to type unicode characters so will be using clipboard as a workaround
-#     clipboard.copy(msg)
-#     pyautogui.hotkey("ctrl", "a")
-#     pyautogui.hotkey("del")
-#     pyautogui.hotkey("ctrl", "v")
-#     time.sleep(0.2)
-#     pyautogui.click(x=left + ref_x, y=top + ref_y)
-#     pyautogui.hotkey('alt', 'tab')
-#     pyautogui.moveTo(mouse_x, mouse_y)
 
 def getOCR(filename, language_type='CHN_ENG'):
     try:
@@ -454,101 +422,6 @@ def cchandler(signal_received, frame):
         trigger_action(ser, *action, sec=duration)
     exit(0)
 
-# def update_Quanquan_Island(newDODO=None):
-#     global g_lastRestart
-#     quanquan_capture.showWindow()
-#     time.sleep(1)
-#     left, top = quanquan_capture.getPos()
-#     pyautogui.click(left + 7, top + 120)
-#     pyautogui.press('pageup')
-#     time.sleep(0.5)
-#     pyautogui.press('pageup')
-#     time.sleep(0.5)
-#     pyautogui.press('pageup')
-#     time.sleep(0.5)
-#     pyautogui.press('pageup')
-#     time.sleep(0.5)
-#     ref_x, ref_y = quanquan_capture.getRefPos(os.sep.join([os.path.dirname(os.path.realpath(__file__)),'ref_img','btnChangeIsland.jpg']))
-#     if ref_x < 0 or ref_y < 0:
-#         logger.critical('Island Change button not found!!! Exiting to prevent further damage...')
-#         sys.exit(0)
-#     pyautogui.click(x=left + ref_x, y=top + ref_y)
-#     time.sleep(1)
-#     pyautogui.click(x=left + ref_x, y=top + ref_y)
-#     time.sleep(2)
-#     ref_x, ref_y = quanquan_capture.getRefPos(os.sep.join([os.path.dirname(os.path.realpath(__file__)),'ref_img','btnPwd.jpg']))
-#     if ref_x < 0 or ref_y < 0:
-#         logger.critical('Textbox for DODO code not found!!! Exiting to prevent further damage...')
-#         sys.exit(0)
-#     #here we still need the additional offset,
-#     # as we are actually locating the radio button which is one section above the password text box
-#     if newDODO is not None:
-#         pyautogui.click(x=left + ref_x + 266, y=top + ref_y + 60)
-#         pyautogui.press('backspace')
-#         pyautogui.press('backspace')
-#         pyautogui.press('backspace')
-#         pyautogui.press('backspace')
-#         pyautogui.press('backspace')
-#         pyautogui.press('delete')
-#         pyautogui.press('delete')
-#         pyautogui.press('delete')
-#         pyautogui.press('delete')
-#         pyautogui.press('delete')
-#         #clipboard.set(string)
-#         pyautogui.write(newDODO)
-#     pyautogui.press('pagedown')
-#     pyautogui.press('pagedown')
-#     time.sleep(1)
-#     pyautogui.click(x=left+210, y=top+685)
-#     time.sleep(2)
-#     pyautogui.click(x=left+210, y=top+685)
-#     time.sleep(2)
-#     pyautogui.click(x=left+210, y=top+685)
-#     time.sleep(2)
-#     left, top = quanquan_capture.getPos()
-#     ref_x, ref_y = quanquan_capture.getRefPos(os.sep.join([os.path.dirname(os.path.realpath(__file__)),'ref_img','btnAgree.jpg']))
-#     if ref_x < 0 or ref_y < 0:
-#         logger.critical('Agree button not found!!! Exiting to prevent further damage...')
-#         sys.exit(0)
-#     pyautogui.click(x=left + ref_x, y=top + ref_y)
-#     time.sleep(5)#wait for the page to get back to island detail
-#     if newDODO is not None:
-#         sendMsg(quanquan_capture, u'[喵] 呼...机场已恢复开放~请刷新页面获取最新密码~（趴...')
-#     else:
-#         #sendMsg(quanquan_capture, u'[喵] +3600s')
-#         pass
-#     g_lastRestart = int(time.monotonic())
-
-# def close_Quanquan_Island():
-#     quanquan_capture.showWindow()
-#     time.sleep(1)
-#     left, top = quanquan_capture.getPos()
-#     pyautogui.click(left + 7, top + 120)
-#     pyautogui.press('pageup')
-#     time.sleep(0.5)
-#     pyautogui.press('pageup')
-#     time.sleep(0.5)
-#     pyautogui.press('pageup')
-#     time.sleep(0.5)
-#     pyautogui.press('pageup')
-#     time.sleep(0.5)
-#     ref_x, ref_y = quanquan_capture.getRefPos(os.sep.join([os.path.dirname(os.path.realpath(__file__)),'ref_img','btnCloseIsland.jpg']))
-#     if ref_x < 0 or ref_y < 0:
-#         logger.critical('Island Close button not found!!! Exiting to prevent further damage...')
-#         sys.exit(0)
-#     pyautogui.click(x=left + ref_x, y=top + ref_y)
-#     time.sleep(1)
-#     pyautogui.click(x=left + ref_x, y=top + ref_y)
-#     time.sleep(2)
-#     ref_x, ref_y = quanquan_capture.getRefPos(os.sep.join([os.path.dirname(os.path.realpath(__file__)),'ref_img','btnConfirmClosure.jpg']))
-#     if ref_x < 0 or ref_y < 0:
-#         logger.critical('Confirm Closure button not found!!! Exiting to prevent further damage...')
-#         sys.exit(0)
-#     pyautogui.click(x=left + ref_x, y=top + ref_y)
-#     logger.info('Quanquan island closed. Exiting...')
-    
-#     sys.exit(0)
-
 def getSysTime():
     trigger_action(ser, 'HOME')
     time.sleep(2)
@@ -604,7 +477,7 @@ def sendRequest(url, method = 'get', data = None, headers = None, files = None, 
     finally:
         t1 = time.time()
         #print('[INFO] ' + time.ctime() + ': ' + str(comment) + ' : Took', t1 - t0, 'seconds')
-        logger.info(str(comment) + ' : Took ' + str(round(t1 - t0,2)) + ' seconds')
+        logger.debug(str(comment) + ' : Took ' + str(round(t1 - t0,2)) + ' seconds')
 
     if resp.status_code == 200:
         #parsed_json = json.loads(resp.text)
@@ -730,7 +603,7 @@ while True:
         (config['quanquan_enabled'] == 'yes' or config['DODOApp_enabled'] == 'yes'):
         #calculate the current switch system time by applying offset to the 
         #original system time captured on start up. This is to avoid expensive capture and OCR
-        timeDelta = g_sysTime.replace(hour=22, minute=00) - \
+        timeDelta = g_sysTime.replace(hour=23, minute=00) - \
             (g_sysTime + datetime.timedelta(seconds=(int(time.monotonic()) - g_sysTimeMono)))
         if 300 < timeDelta.total_seconds() <= 1200:
             g_islandUpdateInterval = 300
@@ -960,9 +833,11 @@ while True:
     if (config['quanquan_enabled'] == 'yes' or config['DODOApp_enabled'] == 'yes'):
         if len(text) != 5:
             #we will be here only if both tesseract and Baidu gave wrong OCR result
+            logger.critical('Incorrect length detected with DODOCode!!!')
             xcx_adapter.closeIsland()
         else:
             xcx_adapter.updateIsland(newDODO=text)
+            xcx_adapter.sendMsg(u'[喵] 呼...机场已恢复开放~请刷新页面获取最新密码~（趴...')
 
     #now leave the airport and head to the chair
     trigger_action(ser, 'L_LEFT', sec=0.9)
