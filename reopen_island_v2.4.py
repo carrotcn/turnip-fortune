@@ -13,7 +13,7 @@ import sys
 
 from signal import signal, SIGINT
 
-import datetime
+import datetime,calendar
 import clipboard
 import requests
 import json
@@ -43,7 +43,11 @@ from email.mime.text import MIMEText
 
 import configparser
 
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
+
 from bgd_cap import cl_bgd_cap
+from dodoapp_api import DODOApp_API
 
 class cl_xcx_cap:
     def __init__(self):
@@ -342,7 +346,8 @@ def getOCR(filename, language_type='CHN_ENG'):
         host = 'https://aip.baidubce.com/oauth/2.0/token?grant_type=client_credentials' + \
             '&client_id=' + config['baidu_ocr_client_id'] + \
             '&client_secret=' + config['baidu_ocr_client_secret']
-        response = requests.get(host)
+        response = sendRequest(method = 'get', url = host, 
+                data = None, headers = None, comment = 'aip.baidubce.com/oauth')
         if response:
             #print(response.json())
             pass
@@ -361,7 +366,7 @@ def getOCR(filename, language_type='CHN_ENG'):
         access_token = parsed_json['access_token']
         request_url = request_url + "?access_token=" + access_token
         headers = {'content-type': 'application/x-www-form-urlencoded'}
-        response = requests.post(request_url, data=params, headers=headers, timeout=(10, 10))
+        response = sendRequest(method = 'post', url = request_url, data=params, headers=headers, comment='ocr/v1/general_basic')
         if response:
             #print (response.json())
             parsed_json = json.loads(response.text)
@@ -375,7 +380,7 @@ def getOCR(filename, language_type='CHN_ENG'):
     except Exception as x:
         strExcDtl = traceback.format_exc()
         logger.error('Baidu OCR failed!!!')
-        logger.error(strExcDtl)
+        logger.debug(strExcDtl)
 
 def sendMail(to, subject, body=None, attachment_path_list=None):
     msg = MIMEMultipart()
@@ -585,6 +590,50 @@ def hasInternet():
     except (requests.ConnectionError, requests.Timeout) as exception:
         logger.debug("No internet connection.")
         return False
+
+def sendRequest(url, method = 'get', data = None, headers = None, files = None, comment=None):
+    t0 = time.time()
+    try:
+        resp = getattr(requests_retry_session(), method)(url, data = data, headers = headers, files = files, verify=False, timeout=(20, 20))
+        #print(url)
+    except Exception as x:
+        logger.error(str(comment) + ' : ' + x.__class__.__name__)
+    else:
+        pass
+        #print('[INFO] ' + time.ctime() + ': ' + str(comment) + ' : It eventually worked: HTTP', resp.status_code)
+    finally:
+        t1 = time.time()
+        #print('[INFO] ' + time.ctime() + ': ' + str(comment) + ' : Took', t1 - t0, 'seconds')
+        logger.info(str(comment) + ' : Took ' + str(round(t1 - t0,2)) + ' seconds')
+
+    if resp.status_code == 200:
+        #parsed_json = json.loads(resp.text)
+        #if parsed_json['rc'] != 0:
+        #    stopRun('[ERROR] ' + time.ctime() + ': ' + str(comment) + ' rc = ' + str(parsed_json['rc']))
+        #print('[OK] ' + time.ctime() + ': ' + str(comment))
+        pass
+    else:
+        logger.error(str(comment) + ' : HTTP ' + str(resp.status_code))
+
+    return resp
+
+def requests_retry_session(
+    retries=3,
+    backoff_factor=0.3,
+    #status_forcelist=(500, 502, 504),
+    session=None):
+    session = session or requests.Session()
+    retry = Retry(
+        total=retries,
+        read=retries,
+        connect=retries,
+        backoff_factor=backoff_factor,
+        #status_forcelist=status_forcelist,
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount('http://', adapter)
+    session.mount('https://', adapter)
+    return session
 #############################################################################
 signal(SIGINT, cchandler)
 
@@ -631,10 +680,13 @@ if config['quanquan_enabled'] == 'yes' and config['DODOApp_enabled'] == 'yes':
     logger.critical('xcx quanquan and DODOApp cannot be enabled together!!!')
     sys.exit(0)
 if config['quanquan_enabled'] == 'yes':
-    xcx_capture = cl_quanquan_cap()
-    xcx_capture.sendMsg(u'[喵] 服务重启成功')
+    xcx_adapter = cl_quanquan_cap()
+    xcx_adapter.sendMsg(u'[喵] 服务重启成功')
 elif config['DODOApp_enabled'] == 'yes':
-    xcx_capture = cl_DODOApp_cap()
+    if config['DODOApp_use_API'] == 'yes':
+        xcx_adapter = DODOApp_API(config=config)
+    else:
+        xcx_adapter = cl_DODOApp_cap()
 
 g_lastRestart = int(time.monotonic())
 
@@ -664,6 +716,9 @@ if config['interactive_mode'] == 'no':
     timeDelta = g_sysTime.replace(hour=23, minute=00) - g_sysTime
     logger.info('Store will be closing at (US Eastern): ' + \
         (datetime.datetime.now() + timeDelta).strftime(r'%Y-%m-%d %H:%M'))
+    if config['DODOApp_enabled'] == 'yes' and config['DODOApp_use_API'] == 'yes':
+        expTime = str(calendar.timegm((datetime.datetime.now(datetime.timezone.utc) + timeDelta).timetuple())) + '513'
+        xcx_adapter.updateIsland(expireTime=expTime)
 
 while True:
     #img = bgd_capture.getIM().crop((1060,100,1100,101))
@@ -684,16 +739,17 @@ while True:
         if (int(time.monotonic()) - g_lastRestart) > g_islandUpdateInterval:
             #skip island refresh if the shop is closing in 1 hr
             if timeDelta.total_seconds() >= 3600:
-                xcx_capture.updateIsland()
+                if isinstance(xcx_adapter,cl_quanquan_cap):
+                    xcx_adapter.updateIsland() 
             if timeDelta.total_seconds() > 60:
                 hour, second = divmod(timeDelta.total_seconds(), 3600)
                 minute, second = divmod(second, 60)
                 strTime = (f'{int(hour)}小时' if hour != 0 else '') + \
                     (f'{int(minute)}分钟' if minute != 0 else '')
-                xcx_capture.sendMsg(f'[喵] 本岛商店将于{strTime}后结束营业。')
+                xcx_adapter.sendMsg(f'[喵] 本岛商店将于{strTime}后结束营业。')
                 g_lastRestart = int(time.monotonic())
             else:
-                xcx_capture.closeIsland()
+                xcx_adapter.closeIsland()
     bgd_capture.showWindow()
     time.sleep(0.2)
     img_full = bgd_capture.getIM()
@@ -714,7 +770,7 @@ while True:
         logger.info('New Visitor: ' + strPlayerName)
         if config['quanquan_announce_traffic'] == 'yes':
             l_t1 = time.monotonic()
-            xcx_capture.sendMsg(u'[喵] 侦测到进港航班：' + strPlayerName + u' （飞行中会“正忙”，请稍候...)')
+            xcx_adapter.sendMsg(u'[喵] 侦测到进港航班：' + strPlayerName + u' （飞行中会“正忙”，请稍候...)')
 
         # This is to resolve the occasional color flickering from the capture card.
         # Basically we try a few more times before concluding the arrival of the flight
@@ -739,7 +795,7 @@ while True:
             # img.save(filename_tmp)
 
             if config['quanquan_announce_traffic'] == 'yes':
-                xcx_capture.sendMsg(u'[喵] ' + strPlayerName + u' 已落地，用时'
+                xcx_adapter.sendMsg(u'[喵] ' + strPlayerName + u' 已落地，用时'
                     + str(int(time.monotonic() - l_t1) + 5) + u'秒。下一位旅客请尝试登机')
             # this is to avoid the next main iteration captures prematurely the fading animation
             # of the airport flip board after the flight arrival
@@ -779,9 +835,9 @@ while True:
             logger.info('Departing: ' + strPlayerName)
             if config['quanquan_announce_traffic'] == 'yes':
                 if strPlayerName.replace(' ','') == '':
-                    xcx_capture.sendMsg(u'[喵] 有人离岛啦~跑太快没看清>__<...唔...')
+                    xcx_adapter.sendMsg(u'[喵] 有人离岛啦~跑太快没看清>__<...唔...')
                 else:
-                    xcx_capture.sendMsg(u'[喵] ' + strPlayerName + u' 离岛啦~ （离境过程中会短暂“正忙”)')
+                    xcx_adapter.sendMsg(u'[喵] ' + strPlayerName + u' 离岛啦~ （离境过程中会短暂“正忙”)')
             time.sleep(5)#to avoid capturing the same message
             break
         continue
@@ -796,7 +852,7 @@ while True:
             time.sleep(30)
 
     if (config['quanquan_enabled'] == 'yes' or config['DODOApp_enabled'] == 'yes'):
-        xcx_capture.sendMsg(u'[喵] 炸啦~炸啦~岛炸啦~~密码失效啦~~飞奔向机场重开ing...')
+        xcx_adapter.sendMsg(u'[喵] 炸啦~炸啦~岛炸啦~~密码失效啦~~飞奔向机场重开ing...')
     
     if config['interactive_mode'] == 'yes':
         logger.warning('Go back to OS HOME menu to continue...')
@@ -904,9 +960,9 @@ while True:
     if (config['quanquan_enabled'] == 'yes' or config['DODOApp_enabled'] == 'yes'):
         if len(text) != 5:
             #we will be here only if both tesseract and Baidu gave wrong OCR result
-            xcx_capture.closeIsland()
+            xcx_adapter.closeIsland()
         else:
-            xcx_capture.updateIsland(newDODO=text)
+            xcx_adapter.updateIsland(newDODO=text)
 
     #now leave the airport and head to the chair
     trigger_action(ser, 'L_LEFT', sec=0.9)
