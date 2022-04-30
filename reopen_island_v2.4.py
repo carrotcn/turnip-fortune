@@ -622,6 +622,8 @@ while True:
                 xcx_adapter.sendMsg(f'[喵] 本岛商店将于{strTime}后结束营业。')
                 g_lastRestart = int(time.monotonic())
             else:
+                for action, duration in command_list_g4:
+                    trigger_action(ser, *action, sec=duration)
                 xcx_adapter.closeIsland()
     bgd_capture.showWindow()
     time.sleep(0.2)
@@ -834,6 +836,8 @@ while True:
         if len(text) != 5:
             #we will be here only if both tesseract and Baidu gave wrong OCR result
             logger.critical('Incorrect length detected with DODOCode!!!')
+            for action, duration in command_list_g4:
+                trigger_action(ser, *action, sec=duration)
             xcx_adapter.closeIsland()
         else:
             xcx_adapter.updateIsland(newDODO=text)
