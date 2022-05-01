@@ -788,7 +788,7 @@ while True:
         logger.critical('Character is lost in the airport. Exiting to prevent further damage...')
         sys.exit(0)
 
-    #Reload the command list file so that any changes can be adopted without a restart
+    # Reload the command list file so that any changes can be adopted without a restart
     command_list_g1.clear()
     command_list_g4.clear()
     with open(os.sep.join([os.path.dirname(os.path.realpath(__file__)),'reopen_island_command_v1.txt']), 'r') as command_file:
@@ -800,6 +800,15 @@ while True:
                 command_list_g1.append(command_struc)
             elif group == '4':
                 command_list_g4.append(command_struc) #release the controller
+    # Check the connection again here before getting back into the airport
+    while(True):
+        logger.debug('Checking internet connection again...')
+        if hasInternet():
+            break
+        else:
+            logger.debug('No internet connection. Try again in 30 seconds.')
+            time.sleep(30)
+    
     logger.debug('Starting g1.')
     for action, duration in command_list_g1:
         trigger_action(ser, *action, sec=duration)

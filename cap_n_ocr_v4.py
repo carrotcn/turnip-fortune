@@ -279,7 +279,10 @@ while(True):
                     sendMail(config['DEV_MAIL_RECIPIENT'],'Turnip Price@'+strPrice,str(time.ctime()),attachment_path_list)
                     
                     config_temp = configparser.ConfigParser()
-                    config_temp['DODOApp'] = {}
+                    try:
+                        config_temp.read(os.sep.join([os.path.dirname(os.path.realpath(__file__)),'dodoapp_local_config.ini']))
+                    except Exception as x:
+                        config_temp['DODOApp'] = {}
                     config_temp['DODOApp']['island_price'] = strPrice
                     with open(os.sep.join([os.path.dirname(os.path.realpath(__file__)),'dodoapp_local_config.ini']), 'w') as configfile:
                         config_temp.write(configfile)
