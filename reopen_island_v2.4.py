@@ -412,7 +412,7 @@ def getConfig():
     if config_main.has_section('REOPEN_ISLAND'):
         return config_main['REOPEN_ISLAND']
     else:
-        logger.info('acnh_config.ini not found!!! Exiting...')
+        logger.error('acnh_config.ini not found!!! Exiting...')
         sys.exit(0)
 
 def cchandler(signal_received, frame):
@@ -425,10 +425,13 @@ def cchandler(signal_received, frame):
 def getSysTime():
     trigger_action(ser, 'HOME')
     time.sleep(2)
-    img = bgd_capture.getIM().crop((934, 119, 1022, 153)).convert('L').point(fn, mode='1')
+    img = bgd_capture.getIM().crop((934, 119, 1027, 153)).convert('L').point(fn, mode='1')
     filename = os.sep.join([config['CAP_DIR'],'test','sys_time_' + str(int(time.time())) + '.jpg'])
     img.save(filename)
     strText = getOCR(filename,'ENG').replace(' ', '')
+    if strText is None or strText == '':
+        logger.error('Unable to read system time of Switch OS. Exiting...')
+        sys.exit(0)
     logger.info('Switch system time (from OCR): ' + strText)
     trigger_action(ser, 'HOME')
     time.sleep(2)
