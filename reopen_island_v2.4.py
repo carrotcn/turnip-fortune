@@ -482,7 +482,7 @@ def sendRequest(url, method = 'get', data = None, headers = None, files = None, 
         #print('[INFO] ' + time.ctime() + ': ' + str(comment) + ' : Took', t1 - t0, 'seconds')
         logger.debug(str(comment) + ' : Took ' + str(round(t1 - t0,2)) + ' seconds')
 
-    if resp.status_code == 200:
+    if resp is not None and resp.status_code == 200:
         #parsed_json = json.loads(resp.text)
         #if parsed_json['rc'] != 0:
         #    stopRun('[ERROR] ' + time.ctime() + ': ' + str(comment) + ' rc = ' + str(parsed_json['rc']))

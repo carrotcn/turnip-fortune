@@ -19,16 +19,23 @@ proxies = {
 def sendRequest(url, method = 'get', data = None, headers = None, files = None, comment=None):
     logger = logging.getLogger('__main__')
     t0 = time.time()
-    try:
-        resp = getattr(requests_retry_session(), method)(url, data = data, headers = headers, 
-            files = files, verify=False, timeout=(20, 20))
-        #print(url)
-    except Exception as x:
-        logger.error(str(comment) + ' : ' + x.__class__.__name__)
-    else:
-        pass
+    l_retry = 0
+    while(True):
+        try:
+            resp = getattr(requests_retry_session(), method)(url, data = data, headers = headers, 
+                files = files, verify=False, timeout=(20, 20))
+            #print(url)
+            break
+        except Exception as x:
+            logger.error(str(comment) + ' : ' + x.__class__.__name__)
+            l_retry += 1
+            time.sleep(15)
+            if l_retry == 5:
+                break
+        else:
+            pass
         
-    if resp.status_code == 200:
+    if resp is not None and resp.status_code == 200:
         pass
     else:
         logger.error(f'[ERROR] HTTP {str(resp.status_code)}')
