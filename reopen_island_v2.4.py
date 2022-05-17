@@ -32,6 +32,8 @@ from colormath.color_objects import sRGBColor, LabColor
 from colormath.color_conversions import convert_color
 from colormath.color_diff import delta_e_cie2000
 
+import easyocr
+
 #from matplotlib import pyplot as plt
 
 import platform
@@ -309,46 +311,63 @@ class CustomLogHandler(logging.Handler):
             sendMail(config['DEV_MAIL_RECIPIENT'],'Reopen_island ABENDED!!!', body)
         return 0
 
-def getOCR(filename, language_type='CHN_ENG'):
+def getOCR(filename, language_type='CHN_ENG', engine='easyocr'):
     try:
-        host = 'https://aip.baidubce.com/oauth/2.0/token?grant_type=client_credentials' + \
-            '&client_id=' + config['baidu_ocr_client_id'] + \
-            '&client_secret=' + config['baidu_ocr_client_secret']
-        response = sendRequest(method = 'get', url = host, 
-                data = None, headers = None, comment = 'aip.baidubce.com/oauth')
-        if response:
-            #print(response.json())
-            pass
+        if engine == 'baidu':
+            # Fetch access token only once for every execution.
+            try:
+                access_token = getOCR.at
+            except AttributeError:
+                host = 'https://aip.baidubce.com/oauth/2.0/token?grant_type=client_credentials' + \
+                    '&client_id=' + config['baidu_ocr_client_id'] + \
+                    '&client_secret=' + config['baidu_ocr_client_secret']
+                response = sendRequest(method = 'get', url = host, 
+                        data = None, headers = None, comment = 'aip.baidubce.com/oauth')
+                if response:
+                    #print(response.json())
+                    pass
 
-        parsed_json = json.loads(response.text)
-        #print(parsed_json['access_token'])
+                parsed_json = json.loads(response.text)
+                #print(parsed_json['access_token'])
+                getOCR.at = parsed_json['access_token']
+                access_token = parsed_json['access_token']
 
-        request_url = "https://aip.baidubce.com/rest/2.0/ocr/v1/general_basic"
-        
-        f = open(filename, 'rb')
-        img = base64.b64encode(f.read())
+            request_url = "https://aip.baidubce.com/rest/2.0/ocr/v1/general_basic"
+            
+            f = open(filename, 'rb')
+            img = base64.b64encode(f.read())
 
-        #print(str(time.ctime()) + '|End: Read screenshot')
+            #print(str(time.ctime()) + '|End: Read screenshot')
 
-        params = {"image":img, "language_type":language_type}
-        access_token = parsed_json['access_token']
-        request_url = request_url + "?access_token=" + access_token
-        headers = {'content-type': 'application/x-www-form-urlencoded'}
-        response = sendRequest(method = 'post', url = request_url, data=params, headers=headers, comment='ocr/v1/general_basic')
-        if response:
-            #print (response.json())
-            parsed_json = json.loads(response.text)
-            fullStr = ''
-            for mbr in parsed_json['words_result']:
-                fullStr += mbr['words'] if fullStr == '' else ' - ' + mbr['words']
+            params = {"image":img, "language_type":language_type}
+            # access_token = parsed_json['access_token']
+            request_url = request_url + "?access_token=" + access_token
+            headers = {'content-type': 'application/x-www-form-urlencoded'}
+            response = sendRequest(method = 'post', url = request_url, data=params, headers=headers, comment='ocr/v1/general_basic')
+            if response:
+                #print (response.json())
+                parsed_json = json.loads(response.text)
+                fullStr = ''
+                for mbr in parsed_json['words_result']:
+                    fullStr += mbr['words'] if fullStr == '' else ' - ' + mbr['words']
 
+        elif engine == 'easyocr':
+            try:
+                reader = getOCR.easyocr_reader
+            except AttributeError:
+                getOCR.easyocr_reader = easyocr.Reader(['ch_sim','en'])
+                reader = getOCR.easyocr_reader
+            
+            result = reader.readtext(filename, detail = 0)
+            fullStr = ' - '.join(result)
         #print(fullStr)
         return fullStr
 
     except Exception as x:
         strExcDtl = traceback.format_exc()
-        logger.error('Baidu OCR failed!!!')
+        logger.error('OCR failed!!!')
         logger.debug(strExcDtl)
+        return ''
 
 def sendMail(to, subject, body=None, attachment_path_list=None):
     msg = MIMEMultipart()

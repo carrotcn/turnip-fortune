@@ -199,7 +199,7 @@ filename = os.sep.join([config['CAP_DIR'],'cap_new_island_pwd_'+ str(int(time.ti
 img.save(filename) 
 
 if len(text) != 5:
-    logger.error('Local OCR failed. Falling back to Baidu OCR.')
+    logger.error('Local OCR failed.')
     sys.exit(0)
 
 for _ in range(14):
