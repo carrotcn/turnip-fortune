@@ -858,22 +858,24 @@ while True:
     attachment_path_list = []
     attachment_path_list.append(filename)
     sendMail(config['new_code_maillist'], 'New DODO Code for Your Island', body, attachment_path_list)
+
+    if len(text) != 5:
+        #we will be here only if both tesseract and Baidu gave wrong OCR result
+        logger.critical('Incorrect length detected with DODOCode!!!')
+        for action, duration in command_list_g4:
+            trigger_action(ser, *action, sec=duration)
+        if (config['quanquan_enabled'] == 'yes' or config['DODOApp_enabled'] == 'yes'):
+            xcx_adapter.closeIsland()
+        sys.exit(0)
+    else:
+        if (config['quanquan_enabled'] == 'yes' or config['DODOApp_enabled'] == 'yes'):
+            xcx_adapter.updateIsland(newDODO=text)
+            xcx_adapter.sendMsg(u'[喵] 呼...机场已恢复开放~请刷新页面获取最新密码~（趴...')
+
     for _ in range(14):
         trigger_action(ser, 'B')
         time.sleep(0.25)
     logger.info('Gate Reopened.')
-
-    if (config['quanquan_enabled'] == 'yes' or config['DODOApp_enabled'] == 'yes'):
-        if len(text) != 5:
-            #we will be here only if both tesseract and Baidu gave wrong OCR result
-            logger.critical('Incorrect length detected with DODOCode!!!')
-            for action, duration in command_list_g4:
-                trigger_action(ser, *action, sec=duration)
-            xcx_adapter.closeIsland()
-        else:
-            xcx_adapter.updateIsland(newDODO=text)
-            xcx_adapter.sendMsg(u'[喵] 呼...机场已恢复开放~请刷新页面获取最新密码~（趴...')
-
     #now leave the airport and head to the chair
     trigger_action(ser, 'L_LEFT', sec=0.9)
     trigger_action(ser, 'L_DOWN', sec=2.5)
