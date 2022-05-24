@@ -796,19 +796,29 @@ while True:
     # Therefore we seek for the frame of the mini map here to make sure 
     # that we are still within the game
     time.sleep(5)
-    img = bgd_capture.getIM().crop((990,550,993,700))
-    pixelcolor1 = img.getpixel((0,0))
-    pixelcolor2 = img.getpixel((0,50))
-    pixelcolor3 = img.getpixel((0,100))
-    pixelcolor4 = img.getpixel((0,149))
-    color_ref = (254, 251, 230)
-    if not isSimilarColor(pixelcolor1,color_ref) \
-        == isSimilarColor(pixelcolor2,color_ref) \
-        == isSimilarColor(pixelcolor3,color_ref) \
-        == isSimilarColor(pixelcolor4,color_ref) \
-        == True:
-        logger.critical('Character is lost in the airport. Exiting to prevent further damage...')
-        sys.exit(0)
+    # This is to resolve the occasional color flickering from the capture card.
+    # Basically we try a few more times before concluding the arrival of the flight
+    diffColorCount = 0
+    while True:
+        img = bgd_capture.getIM().crop((990,550,993,700))
+        pixelcolor1 = img.getpixel((0,0))
+        pixelcolor2 = img.getpixel((0,50))
+        pixelcolor3 = img.getpixel((0,100))
+        pixelcolor4 = img.getpixel((0,149))
+        color_ref = (254, 251, 230)
+        if not isSimilarColor(pixelcolor1,color_ref) \
+            == isSimilarColor(pixelcolor2,color_ref) \
+            == isSimilarColor(pixelcolor3,color_ref) \
+            == isSimilarColor(pixelcolor4,color_ref) \
+            == True:
+            diffColorCount += 1
+            time.sleep(1)
+            if diffColorCount <= 5:
+                continue
+            else:
+                logger.critical('Character is lost in the airport. Exiting to prevent further damage...')
+                sys.exit(0)
+        break
 
     # Reload the command list file so that any changes can be adopted without a restart
     command_list_g1.clear()

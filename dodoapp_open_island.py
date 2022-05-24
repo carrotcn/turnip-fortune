@@ -229,5 +229,5 @@ strIsPrivate = config_temp['DODOApp']['isPrivate']
 
 xcx_adapter = DODOApp_API(config=config)
 expTime = str(calendar.timegm((datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=2)).timetuple())) + '513'
-strDesc = u'时旅高价，介意勿排。\n\n请app点赞~\n\n每次排队只能上岛卖一趟，留言多趟无效！如需多趟请每趟重新排队。\n上岛角色名字必须与排队时填写的“游戏昵称”一致，以便岛主验证身份防止偷渡。\n如发现有违反会手动炸岛+拉黑。\n\n岛主挂机人不在，炸岛随缘重开。'
+strDesc = u'时旅高价（只调系统时间，非破解改存档），介意勿排。\n\n请app点赞~\n\n每次排队只能上岛卖一趟，留言多趟无效！如需多趟请每趟重新排队。\n上岛角色名字必须与排队时填写的“游戏昵称”一致，以便岛主验证身份防止偷渡。\n如发现有违反会手动炸岛+拉黑。\n\n岛主挂机人不在，炸岛随缘重开。\n全程有录像，小偷请慎重。\n可能随时关岛所以队列特意设得很短，排不上请多试几次。'
 xcx_adapter.createIsland(expireTime=expTime,isPrivate=strIsPrivate,newDODO=text,price=strPrice,desc=strDesc)
