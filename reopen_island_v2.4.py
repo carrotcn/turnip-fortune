@@ -814,6 +814,7 @@ while True:
             diffColorCount += 1
             time.sleep(1)
             if diffColorCount <= 5:
+                logger.debug('Mini-map not found at the airport. Flickering?')
                 continue
             else:
                 logger.critical('Character is lost in the airport. Exiting to prevent further damage...')
