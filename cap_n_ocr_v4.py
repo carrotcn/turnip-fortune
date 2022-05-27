@@ -36,7 +36,7 @@ from colormath.color_diff import delta_e_cie2000
 from bgd_cap import cl_bgd_cap
 
 def isSimilarColor(color1, color2):
-    THRESHOLD = 5
+    THRESHOLD = 10
     # Red Color
     color1_rgb = sRGBColor(color1[0], color1[1], color1[2])
 
@@ -186,6 +186,11 @@ while(True):
         pixelcolor3 = img.getpixel((0,100))
         pixelcolor4 = img.getpixel((0,149))
         color_ref = (254, 251, 230)
+        # print(str(pixelcolor1) + str(isSimilarColor(pixelcolor1,color_ref)))
+        # print(str(pixelcolor2) + str(isSimilarColor(pixelcolor2,color_ref)))
+        # print(str(pixelcolor3) + str(isSimilarColor(pixelcolor3,color_ref)))
+        # print(str(pixelcolor4) + str(isSimilarColor(pixelcolor4,color_ref)))
+        
         if not isSimilarColor(pixelcolor1,color_ref) \
             == isSimilarColor(pixelcolor2,color_ref) \
             == isSimilarColor(pixelcolor3,color_ref) \
