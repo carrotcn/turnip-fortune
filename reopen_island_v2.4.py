@@ -856,6 +856,7 @@ while True:
     # takes extra time which leads to failure due to action sequence getting out of sync.
     logger.debug('Waiting for ACNH server connection...')
     bConnectionReady = False
+    iRetryCounter = 0
     while bConnectionReady == False:
         img = bgd_capture.getIM().crop((286, 519, 625, 570))
         cv2_img = cv2.cvtColor(numpy.array(img), cv2.COLOR_BGR2GRAY)
@@ -868,6 +869,14 @@ while True:
             logger.debug('ACNH server connection established.')
             bConnectionReady = True
             break
+        iRetryCounter += 1
+        if iRetryCounter >= 300:
+            logger.critical('ACNH server connection seems broken... Exiting...')
+            for action, duration in command_list_g4:
+                trigger_action(ser, *action, sec=duration)
+            if (config['quanquan_enabled'] == 'yes' or config['DODOApp_enabled'] == 'yes'):
+                xcx_adapter.closeIsland()
+            sys.exit(0)
         time.sleep(1)
     logger.debug('Starting g5.')
     for action, duration in command_list_g5:
