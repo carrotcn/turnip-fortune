@@ -536,8 +536,10 @@ config = getConfig()
 tessdata_dir_config = r'--tessdata-dir "' + config['TESSDATA_DIR'] + r'"'
 pytesseract.pytesseract.tesseract_cmd = config['TESSERACT_CMD']
 
-command_list_g1 = []
-command_list_g4 = []
+command_list_g1 = [] #steps of going back into the airport and talk to the attendant (Part I: till after internet connection)
+command_list_g4 = [] #steps of giving back the controller
+command_list_g5 = [] #steps of talking to the attendant (Part II: after internet connection)
+
 btnCode = {'L_UP':0, 'L_DOWN':1, 'L_LEFT':2, 'L_RIGHT':3, 'R_UP':4, 'R_DOWN':5,
             'R_LEFT':6, 'R_RIGHT':7, 'X':8, 'Y':9, 'A':10, 'B':11, 'L':12, 'R':13,
             'THROW':14, 'NOTHING':15, 'TRIGGERS':16, 'HOME':17, 'MINUS':18}
@@ -824,6 +826,7 @@ while True:
     # Reload the command list file so that any changes can be adopted without a restart
     command_list_g1.clear()
     command_list_g4.clear()
+    command_list_g5.clear()
     with open(os.sep.join([os.path.dirname(os.path.realpath(__file__)),'reopen_island_command_v1.txt']), 'r') as command_file:
         for command_line in command_file:
             group, action, strDuration = command_line.replace('\n', '').split(',')
@@ -833,6 +836,8 @@ while True:
                 command_list_g1.append(command_struc)
             elif group == '4':
                 command_list_g4.append(command_struc) #release the controller
+            elif group == '5':
+                command_list_g5.append(command_struc)
     # Check the connection again here before getting back into the airport
     while(True):
         logger.debug('Checking internet connection again...')
@@ -845,6 +850,29 @@ while True:
     logger.debug('Starting g1.')
     for action, duration in command_list_g1:
         trigger_action(ser, *action, sec=duration)
+    
+    # Attendant will be preparing ACNH server connection after g1...
+    # We need to separate g5 from g1, as sometimes the connection to ACNH server
+    # takes extra time which leads to failure due to action sequence getting out of sync.
+    logger.debug('Waiting for ACNH server connection...')
+    bConnectionReady = False
+    while bConnectionReady == False:
+        img = bgd_capture.getIM().crop((286, 519, 625, 570))
+        cv2_img = cv2.cvtColor(numpy.array(img), cv2.COLOR_BGR2GRAY)
+        img_ref = cv2.cvtColor(
+            cv2.imread(os.sep.join([os.path.dirname(os.path.realpath(__file__)),'ref_img','txtAirportHowToInvite.jpg'])), cv2.COLOR_BGR2GRAY)
+        res = cv2.matchTemplate(cv2_img, img_ref, cv2.TM_CCOEFF_NORMED)
+        threshold = 0.95
+        loc = numpy.where(res >= threshold)
+        for pt in zip(*loc[::-1]):
+            logger.debug('ACNH server connection established.')
+            bConnectionReady = True
+            break
+        time.sleep(1)
+    logger.debug('Starting g5.')
+    for action, duration in command_list_g5:
+        trigger_action(ser, *action, sec=duration)        
+    
     img = bgd_capture.getIM().crop((300, 520, 520, 620)).convert('L').point(fn, mode='1')
     logger.info('DODO code captured.')
     img = img.crop((0, 50, 220, 100))
