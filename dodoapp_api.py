@@ -1,3 +1,4 @@
+from base64 import encode
 import requests
 import datetime,time,calendar
 import json
@@ -132,7 +133,7 @@ class DODOApp_API:
         resp = sendRequest(method = 'post', url = 'https://apis.imdodo.com/animalCrossing/stock/myStockPriceStatus', 
             data = data.encode('utf-8'), headers = headers, comment = 'myStockPriceStatus')
         try:
-            parsed_json = json.loads(resp.text)
+            parsed_json = resp.json()
             if parsed_json['status'] != 0:
                 self.logger.error(resp.text)
                 raise Exception
@@ -173,7 +174,10 @@ class DODOApp_API:
             resp = sendRequest(method = 'post', url = 'https://apis.imdodo.com/animalCrossing/stocksV3', 
                 data = data.encode('utf-8'), headers = headers, comment = 'stocksV3')
             try:
-                parsed_json = json.loads(resp.text)
+                # since v2.26.0 update, requests library supports Brotli compression if either 
+                # the brotli or brotlicffi package is installed. So, if the response encoding 
+                # is br, request library will automatically handle it and decompress it.
+                parsed_json = resp.json()
                 if parsed_json['status'] != 0:
                     self.logger.error(resp.text)
                     raise Exception
@@ -250,7 +254,7 @@ class DODOApp_API:
         resp = sendRequest(method = 'post', url = 'https://apis.imdodo.com/animalCrossing/stock/newStockPrice', 
             data = data.encode('utf-8'), headers = headers, comment = 'newStockPrice')
         try:
-            parsed_json = json.loads(resp.text)
+            parsed_json = resp.json()
             if parsed_json['status'] != 0:
                 self.logger.error(resp.text)
                 raise Exception
@@ -300,7 +304,7 @@ class DODOApp_API:
         resp = sendRequest(method = 'post', url = 'https://apis.imdodo.com/animalCrossing/stock/update', 
             data = data.encode('utf-8'), headers = headers, comment = 'update')
         try:
-            parsed_json = json.loads(resp.text)
+            parsed_json = resp.json()
             if parsed_json['status'] != 0:
                 self.logger.error(resp.text)
                 raise Exception
@@ -338,7 +342,7 @@ class DODOApp_API:
         resp = sendRequest(method = 'post', url = 'https://apis.imdodo.com/animalCrossing/stock/setStockPriceStatus', 
             data = data.encode('utf-8'), headers = headers, comment = 'setStockPriceStatus')
         try:
-            parsed_json = json.loads(resp.text)
+            parsed_json = resp.json()
             if parsed_json['status'] != 0:
                 self.logger.error(resp.text)
                 raise Exception
@@ -375,7 +379,7 @@ class DODOApp_API:
         resp = sendRequest(method = 'post', url = 'https://apis.imdodo.com/animalCrossing/stock/delete', 
             data = data.encode('utf-8'), headers = headers, comment = 'delete')
         try:
-            parsed_json = json.loads(resp.text)
+            parsed_json = resp.json()
             if parsed_json['status'] != 0:
                 self.logger.error(resp.text)
                 raise Exception
@@ -417,7 +421,7 @@ class DODOApp_API:
         resp = sendRequest(method = 'post', url = 'https://apis.imdodo.com/animalCrossing/commentV2', 
             data = data.encode('utf-8'), headers = headers, comment = 'commentV2')
         try:
-            parsed_json = json.loads(resp.text)
+            parsed_json = resp.json()
             if parsed_json['status'] != 0:
                 self.logger.error(resp.text)
                 raise Exception

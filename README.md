@@ -30,7 +30,7 @@ This program helps you find an ideal selling price of turnip in the Nintendo Swi
   - GMAIL_NOTIFICATION_USR: gmail address used by the program to send mail notification.
   - GMAIL_NOTIFICATION_PWD: password of the gmail account used to send mail notification.
   - DEV_MAIL_RECIPIENT: recipient list of notification.
-- Install python packages: ``` python -m pip install pytesseract pyserial colormath pywin32 ```
+- Install python packages: ``` python -m pip install pytesseract pyserial colormath pywin32 brotli ```
 
 ## How to use
 
