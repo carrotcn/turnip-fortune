@@ -80,6 +80,19 @@ def getConfig():
         logger.info('acnh_config.ini not found!!! Exiting...')
         sys.exit(0)
 
+def setConfig(config_reopen_island):
+    config_main = configparser.ConfigParser()
+    config_main.read(os.sep.join([os.path.dirname(os.path.realpath(__file__)),'acnh_config.ini']))
+    if config_main.has_section('REOPEN_ISLAND'):
+        with open(os.sep.join([os.path.dirname(os.path.realpath(__file__)),'acnh_config_old.ini']), 'w') as configfile:
+            config_main.write(configfile)
+        config_main['REOPEN_ISLAND'] = config_reopen_island
+        with open(os.sep.join([os.path.dirname(os.path.realpath(__file__)),'acnh_config.ini']), 'w') as configfile:
+            config_main.write(configfile)
+    else:
+        logger.info('acnh_config.ini not found!!! Exiting...')
+        sys.exit(0)
+
 def cchandler(signal_received, frame):
     # Handle any cleanup here
     logger.info('SIGINT or CTRL-C detected. Giving back controller...')
@@ -205,7 +218,7 @@ if len(text) != 5:
 for _ in range(14):
     trigger_action(ser, 'B')
     time.sleep(0.25)
-logger.info('Gate opened.')
+logger.info('Positioning character...')
 
 #now leave the airport and head to the chair
 trigger_action(ser, 'L_LEFT', sec=0.9)
@@ -227,7 +240,14 @@ if not config_temp.has_section('DODOApp'):
 strPrice = config_temp['DODOApp']['island_price']
 strIsPrivate = config_temp['DODOApp']['isPrivate']
 
+
 xcx_adapter = DODOApp_API(config=config)
+logger.debug('Refreshing token from DODOApp...')
+xcx_adapter.refreshToken()
+logger.debug('Saving new token to local config file...')
+setConfig(config)
+logger.debug('Posting island information to DODOApp...')
 expTime = str(calendar.timegm((datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=2)).timetuple())) + '513'
 strDesc = u'时旅高价（只调系统时间，非破解改存档），介意勿排。\n\n请app点赞~\n\n每次排队只能上岛卖一趟，留言多趟无效！如需多趟请每趟重新排队。\n上岛角色名字必须与排队时填写的“游戏昵称”一致，以便岛主验证身份防止偷渡。\n如发现有违反会手动炸岛+拉黑。\n\n岛主挂机人不在，炸岛随缘重开。\n全程有录像，小偷请慎重。\n可能随时关岛所以队列特意设得很短，排不上请多试几次。'
 xcx_adapter.createIsland(expireTime=expTime,isPrivate=strIsPrivate,newDODO=text,price=strPrice,desc=strDesc)
+logger.info('Done.')
