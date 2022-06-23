@@ -76,6 +76,19 @@ class DODOApp_Island:
     nickName: str
     require: str
 
+@dataclass
+class DODOApp_IslandQueueUser:
+    def __lt__(self, other):
+         return self.rank < other.rank
+    id: int
+    uid: int
+    gameNickName: str
+    createTime: int
+    lastUpdateTime: int
+    nickName: str
+    times: int
+    rank: int    
+
 class DODOApp_API:
     def __init__(self,config) -> None:
         self.logger = logging.getLogger('__main__')
@@ -405,6 +418,64 @@ class DODOApp_API:
             strExcDtl = traceback.format_exc()
             self.logger.debug(strExcDtl)
             sys.exit(0)
+
+    def getIslandQueue(self, stockPriceId=None):
+        
+        local_island_queue = []
+        
+        headers = self.__get_headers()
+
+        parsed_json = self.__get_my_island_raw()
+        mysp = parsed_json['data']['myStockPrice']
+        dictParam_body = {}
+        dictParam_body['apikey'] = self.config_main['DODOApp_apikey']
+        dictParam_body['appType'] = '3'
+        # dictParam_body['clientTime'] = r'2022-04-23%2022%3A16%3A14'
+        dictParam_body['clientTime'] = datetime.datetime.now().strftime('%Y-%m-%d%%20%H%%3A%M%%3A%S')
+        dictParam_body['clientType'] = '4' # '1' = iOS, '4' = Wechat Miniapp
+        dictParam_body['clientVersion'] = '3.9.0'
+        dictParam_body['deviceId'] = self.config_main['DODOApp_deviceId']
+        dictParam_body['marketChannel'] = mysp['userInfo']['marketChannel']
+        dictParam_body['packageName'] = 'com.dodolive.app' 
+        dictParam_body['size'] = '20'
+        dictParam_body['stockPriceId'] = mysp['id'] if stockPriceId is None else stockPriceId
+        # dictParam_body['timestamp'] = '1650766574756'
+        dictParam_body['timestamp'] = str(calendar.timegm(time.gmtime())) + '513'
+        dictParam_body['token'] = self.config_main['DODOApp_token']
+        dictParam_body['uid'] = mysp['uid']
+        dictParam_body['version'] = '1.0'
+
+        data = self.__genStrParam(dictParam=dictParam_body)
+        # print(data)
+        # print(datetime.datetime.now().strftime('%Y-%m-%d%%20%H%%3A%M%%3A%S'))
+
+        # sys.exit(0)
+
+        resp = sendRequest(method = 'post', url = 'https://apis.imdodo.com/animalCrossing/stock/list', 
+            data = data.encode('utf-8'), headers = headers, comment = 'stock/list')
+        try:
+            parsed_json = resp.json()
+            if parsed_json['status'] != 0:
+                self.logger.error(resp.text)
+                raise Exception
+        except Exception as x:
+            self.logger.critical('stock/list failed.')
+            strExcDtl = traceback.format_exc()
+            self.logger.debug(strExcDtl)
+            sys.exit(0)
+        
+        for islandUser in parsed_json['data']['list']:
+            local_island_queue.append(
+                DODOApp_IslandQueueUser(    islandUser['id'],
+                                            islandUser['uid'],
+                                            islandUser['gameNickName'],
+                                            islandUser['createTime'],
+                                            islandUser['lastUpdateTime'],
+                                            islandUser['nickName'],
+                                            islandUser['times'],
+                                            islandUser['rank']
+                                            ))
+        return local_island_queue
 
     def set_my_island_status(self,status):
         headers = self.__get_headers()

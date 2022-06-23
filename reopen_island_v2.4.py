@@ -22,7 +22,7 @@ import pyautogui
 import serial
 import logging
 import os
-
+import multiprocessing
 import re
 import cv2
 import numpy
@@ -50,6 +50,7 @@ from requests.packages.urllib3.util.retry import Retry
 
 from bgd_cap import cl_bgd_cap
 from dodoapp_api import DODOApp_API
+from dodoapp_logger import dodoapp_island_queue_logger
 
 class cl_xcx_cap:
     def __init__(self):
@@ -530,413 +531,416 @@ def requests_retry_session(
     session.mount('https://', adapter)
     return session
 #############################################################################
-signal(SIGINT, cchandler)
+if __name__ ==  '__main__':
 
-config = getConfig()
-tessdata_dir_config = r'--tessdata-dir "' + config['TESSDATA_DIR'] + r'"'
-pytesseract.pytesseract.tesseract_cmd = config['TESSERACT_CMD']
+    signal(SIGINT, cchandler)
 
-command_list_g1 = [] #steps of going back into the airport and talk to the attendant (Part I: till after internet connection)
-command_list_g4 = [] #steps of giving back the controller
-command_list_g5 = [] #steps of talking to the attendant (Part II: after internet connection)
+    config = getConfig()
+    tessdata_dir_config = r'--tessdata-dir "' + config['TESSDATA_DIR'] + r'"'
+    pytesseract.pytesseract.tesseract_cmd = config['TESSERACT_CMD']
 
-btnCode = {'L_UP':0, 'L_DOWN':1, 'L_LEFT':2, 'L_RIGHT':3, 'R_UP':4, 'R_DOWN':5,
-            'R_LEFT':6, 'R_RIGHT':7, 'X':8, 'Y':9, 'A':10, 'B':11, 'L':12, 'R':13,
-            'THROW':14, 'NOTHING':15, 'TRIGGERS':16, 'HOME':17, 'MINUS':18}
+    command_list_g1 = [] #steps of going back into the airport and talk to the attendant (Part I: till after internet connection)
+    command_list_g4 = [] #steps of giving back the controller
+    command_list_g5 = [] #steps of talking to the attendant (Part II: after internet connection)
 
-# create logger
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+    btnCode = {'L_UP':0, 'L_DOWN':1, 'L_LEFT':2, 'L_RIGHT':3, 'R_UP':4, 'R_DOWN':5,
+                'R_LEFT':6, 'R_RIGHT':7, 'X':8, 'Y':9, 'A':10, 'B':11, 'L':12, 'R':13,
+                'THROW':14, 'NOTHING':15, 'TRIGGERS':16, 'HOME':17, 'MINUS':18}
 
-# create console handler and set level to debug
-ch1 = logging.StreamHandler()
-ch1.setLevel(logging.DEBUG)
-ch2 = logging.FileHandler(filename=os.sep.join([config['CAP_DIR'],'visitors','cap_visitor_log.txt']), mode='a', encoding='utf-8')
-ch2.setLevel(logging.INFO)
-ch3 = CustomLogHandler()
-ch3.setLevel(logging.CRITICAL)
-# create formatter
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    # create logger
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.DEBUG)
 
-# add formatter to ch
-ch1.setFormatter(formatter)
-ch2.setFormatter(formatter)
-ch3.setFormatter(formatter)
+    # create console handler and set level to debug
+    ch1 = logging.StreamHandler()
+    ch1.setLevel(logging.DEBUG)
+    ch2 = logging.FileHandler(filename=os.sep.join([config['CAP_DIR'],'visitors','cap_visitor_log.txt']), mode='a', encoding='utf-8')
+    ch2.setLevel(logging.INFO)
+    ch3 = CustomLogHandler()
+    ch3.setLevel(logging.CRITICAL)
+    # create formatter
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 
-# add ch to logger
-logger.addHandler(ch1)
-logger.addHandler(ch2)
-logger.addHandler(ch3)
+    # add formatter to ch
+    ch1.setFormatter(formatter)
+    ch2.setFormatter(formatter)
+    ch3.setFormatter(formatter)
 
-img_disconnect = cv2.imread(os.sep.join([os.path.dirname(os.path.realpath(__file__)),'ref_img','disconnect_original.jpg']))
-img_disconnect = cv2.cvtColor(img_disconnect, cv2.COLOR_BGR2GRAY)
+    # add ch to logger
+    logger.addHandler(ch1)
+    logger.addHandler(ch2)
+    logger.addHandler(ch3)
 
-bgd_capture = cl_bgd_cap()
+    img_disconnect = cv2.imread(os.sep.join([os.path.dirname(os.path.realpath(__file__)),'ref_img','disconnect_original.jpg']))
+    img_disconnect = cv2.cvtColor(img_disconnect, cv2.COLOR_BGR2GRAY)
 
-if config['quanquan_enabled'] == 'yes' and config['DODOApp_enabled'] == 'yes':
-    logger.critical('xcx quanquan and DODOApp cannot be enabled together!!!')
-    sys.exit(0)
-if config['quanquan_enabled'] == 'yes':
-    xcx_adapter = cl_quanquan_cap()
-    xcx_adapter.sendMsg(u'[喵] 服务重启成功')
-elif config['DODOApp_enabled'] == 'yes':
-    if config['DODOApp_use_API'] == 'yes':
-        xcx_adapter = DODOApp_API(config=config)
-    else:
-        xcx_adapter = cl_DODOApp_cap()
+    bgd_capture = cl_bgd_cap()
 
-g_lastRestart = int(time.monotonic())
-
-thresh = 170
-fn = lambda x: 255 if x > thresh else 0
-
-#Preload g4 so that the exit handler can hand over the controller back
-with open(os.sep.join([os.path.dirname(os.path.realpath(__file__)),'reopen_island_command_v1.txt']), 'r') as command_file:
-    for command_line in command_file:
-        group, action, strDuration = command_line.replace('\n', '').split(',')
-        actionlist = action.split('&&')
-        command_struc = (actionlist, float(strDuration))
-        if group == '4':
-            command_list_g4.append(command_struc) #release the controller
-
-ser = serial.Serial(config['COM_PORT'], 9600, timeout=0,bytesize=8, stopbits=1)
-logger.info('<COM port opened.>')
-if config['interactive_mode'] == 'no':
-    ser.write(b'^') 
-    time.sleep(20)
-
-    g_sysTime = datetime.datetime.strptime(getSysTime(), '%H:%M')
-    g_sysTimeMono = int(time.monotonic())
-    g_islandUpdateInterval = 3600
-
-    # display the actual (US Eastern) time of store closure at program start
-    timeDelta = g_sysTime.replace(hour=23, minute=00) - g_sysTime
-    logger.info('Store will be closing at (US Eastern): ' + \
-        (datetime.datetime.now() + timeDelta).strftime(r'%Y-%m-%d %H:%M'))
-    if config['DODOApp_enabled'] == 'yes' and config['DODOApp_use_API'] == 'yes':
-        expTime = str(calendar.timegm((datetime.datetime.now(datetime.timezone.utc) + timeDelta).timetuple())) + '513'
-        xcx_adapter.updateIsland(expireTime=expTime)
-
-while True:
-    #img = bgd_capture.getIM().crop((1060,100,1100,101))
-    #pixelcolor1 = img.getpixel((0,0))
-    #pixelcolor2 = img.getpixel((35,0))
-    #if not (pixelcolor1 == (162, 152, 114) and pixelcolor2 == (155, 143, 104)):
-    #print(str(time.ctime()),'Detecting network error message...')
-    if config['interactive_mode'] == 'no' and \
-        (config['quanquan_enabled'] == 'yes' or config['DODOApp_enabled'] == 'yes'):
-        #calculate the current switch system time by applying offset to the 
-        #original system time captured on start up. This is to avoid expensive capture and OCR
-        timeDelta = g_sysTime.replace(hour=23, minute=00) - \
-            (g_sysTime + datetime.timedelta(seconds=(int(time.monotonic()) - g_sysTimeMono)))
-        if 300 < timeDelta.total_seconds() <= 1200:
-            g_islandUpdateInterval = 300
-        elif timeDelta.total_seconds() <= 300:
-            g_islandUpdateInterval = 60
-        if (int(time.monotonic()) - g_lastRestart) > g_islandUpdateInterval:
-            #skip island refresh if the shop is closing in 1 hr
-            if timeDelta.total_seconds() >= 3600:
-                if isinstance(xcx_adapter,cl_quanquan_cap):
-                    xcx_adapter.updateIsland() 
-            if timeDelta.total_seconds() > 60:
-                hour, second = divmod(timeDelta.total_seconds(), 3600)
-                minute, second = divmod(second, 60)
-                strTime = (f'{int(hour)}小时' if hour != 0 else '') + \
-                    (f'{int(minute)}分钟' if minute != 0 else '')
-                xcx_adapter.sendMsg(f'[喵] 本岛商店将于{strTime}后结束营业。')
-                g_lastRestart = int(time.monotonic())
-            else:
-                for action, duration in command_list_g4:
-                    trigger_action(ser, *action, sec=duration)
-                xcx_adapter.closeIsland()
-    bgd_capture.showWindow()
-    time.sleep(0.2)
-    img_full = bgd_capture.getIM()
-    img = img_full.crop((1036, 550, 1195, 708))
-    # filename_tmp = os.sep.join([config['CAP_DIR'],'test','cap_flip_' + str(int(time.time())) + '.jpg'])
-    # img.save(filename_tmp)
-    pixelcolor1 = img.getpixel((35, 63))
-    pixelcolor2 = img.getpixel((84, 110))
-    color_ref1 = (51, 50, 51)
-    color_ref2 = (34, 141, 197)
-    if isSimilarColor(pixelcolor1,color_ref1) and isSimilarColor(pixelcolor2,color_ref2):
-        time.sleep(5) #wait for the flipping anime
-        img = bgd_capture.getIM().crop((360, 271, 1191, 367)).convert('L').point(fn, mode='1')
-        filename = os.sep.join([config['CAP_DIR'],'visitors','cap_visitor_' + str(int(time.time())) + '.jpg'])
-        img.save(filename)
-        strPlayerName = getOCR(filename)
-        strPlayerName = strPlayerName if strPlayerName is not None else ''
-        logger.info('New Visitor: ' + strPlayerName)
-        if config['quanquan_announce_traffic'] == 'yes':
-            l_t1 = time.monotonic()
-            xcx_adapter.sendMsg(u'[喵] 侦测到进港航班：' + strPlayerName + u' （飞行中会“正忙”，请稍候...)')
-
-        # This is to resolve the occasional color flickering from the capture card.
-        # Basically we try a few more times before concluding the arrival of the flight
-        diffColorCount = 0
-        while True:
-            img = bgd_capture.getIM().crop((1036, 550, 1195, 708))
-            pixelcolor1 = img.getpixel((35, 63))
-            pixelcolor2 = img.getpixel((84, 110))
-            color_ref1 = (51, 50, 51)
-            color_ref2 = (34, 141, 197)
-            if isSimilarColor(pixelcolor1,color_ref1) and isSimilarColor(pixelcolor2,color_ref2):
-                diffColorCount = 0
-                time.sleep(2)
-                continue
-            else:
-                diffColorCount += 1
-                time.sleep(0.5)
-                if diffColorCount <= 3:
-                    continue
-            
-            # filename_tmp = os.sep.join([config['CAP_DIR'],'test','cap_flip_' + str(int(time.time())) + '.jpg'])
-            # img.save(filename_tmp)
-
-            if config['quanquan_announce_traffic'] == 'yes':
-                xcx_adapter.sendMsg(u'[喵] ' + strPlayerName + u' 已落地，用时'
-                    + str(int(time.monotonic() - l_t1) + 5) + u'秒。下一位旅客请尝试登机')
-            # this is to avoid the next main iteration captures prematurely the fading animation
-            # of the airport flip board after the flight arrival
-            time.sleep(2)
-            break
-    #"Network Error" within ACNH
-    cv2_img = cv2.cvtColor(numpy.array(img), cv2.COLOR_BGR2GRAY)
-    #this is for the other type of "connection error" as an OS msgbox
-    cv2_img2 = cv2.cvtColor(
-        numpy.array(img_full.crop((555 - 15, 360 - 15, 555 + 156 + 15, 360 + 34 + 15))), cv2.COLOR_BGR2GRAY)
-    img_ref = cv2.cvtColor(
-        cv2.imread(os.sep.join([os.path.dirname(os.path.realpath(__file__)),'ref_img','txtDisconn.jpg'])), cv2.COLOR_BGR2GRAY)
-    res = cv2.matchTemplate(cv2_img2, img_ref, cv2.TM_CCOEFF_NORMED)
-    threshold = 0.95
-    loc = numpy.where(res >= threshold)
-    isDisconnected = False
-    for pt in zip(*loc[::-1]):
-        isDisconnected = True
-        break
-    if ssim(img_disconnect, cv2_img) < 0.8 and not isDisconnected:
-        #time.sleep(5)
-        #img = bgd_capture.getIM().crop((544,523,757,669)).convert('L').point(fn, mode='1')
-        img = bgd_capture.getIM().crop((500, 523, 790, 669))
-        cv2_img = cv2.cvtColor(numpy.array(img), cv2.COLOR_BGR2GRAY)
-        img_ref = cv2.cvtColor(
-            cv2.imread(os.sep.join([os.path.dirname(os.path.realpath(__file__)),'ref_img','txtBack.jpg'])), cv2.COLOR_BGR2GRAY)
-        res = cv2.matchTemplate(cv2_img, img_ref, cv2.TM_CCOEFF_NORMED)
-        threshold = 0.95
-        loc = numpy.where(res >= threshold)
-        for pt in zip(*loc[::-1]):
-            #just one box is enough...so just return...
-            #cv2.imwrite(os.sep.join([config['CAP_DIR'],'test','cap_back_' + str(int(time.time())) + '.jpg']),cv2_img)
-            filename = os.sep.join([config['CAP_DIR'],'test','cap_back_' + str(int(time.time())) + '.jpg'])
-            img.crop((0, 0, 290, 40)).convert('L').point(lambda x: 255 if x > 110 else 0, mode='1').save(filename)
-            strPlayerName = getOCR(filename)
-            strPlayerName = strPlayerName if strPlayerName is not None else ''
-            logger.info('Departing: ' + strPlayerName)
-            if config['quanquan_announce_traffic'] == 'yes':
-                if strPlayerName.replace(' ','') == '':
-                    xcx_adapter.sendMsg(u'[喵] 有人离岛啦~跑太快没看清>__<...唔...')
-                else:
-                    xcx_adapter.sendMsg(u'[喵] ' + strPlayerName + u' 离岛啦~ （离境过程中会短暂“正忙”)')
-            time.sleep(5)#to avoid capturing the same message
-            break
-        continue
-    
-    logger.error('Connection terminated from ACNH server!!!')
-    while(True):
-        logger.debug('Checking internet connection...')
-        if hasInternet():
-            break
+    if config['quanquan_enabled'] == 'yes' and config['DODOApp_enabled'] == 'yes':
+        logger.critical('xcx quanquan and DODOApp cannot be enabled together!!!')
+        sys.exit(0)
+    if config['quanquan_enabled'] == 'yes':
+        xcx_adapter = cl_quanquan_cap()
+        xcx_adapter.sendMsg(u'[喵] 服务重启成功')
+    elif config['DODOApp_enabled'] == 'yes':
+        if config['DODOApp_use_API'] == 'yes':
+            xcx_adapter = DODOApp_API(config=config)
+            multiprocessing.Process(target=dodoapp_island_queue_logger, args=(config,xcx_adapter,), daemon=True).start()
         else:
-            logger.debug('No internet connection. Try again in 30 seconds.')
-            time.sleep(30)
+            xcx_adapter = cl_DODOApp_cap()
 
-    if (config['quanquan_enabled'] == 'yes' or config['DODOApp_enabled'] == 'yes'):
-        xcx_adapter.sendMsg(u'[喵] 炸啦~炸啦~岛炸啦~~密码失效啦~~飞奔向机场重开ing...')
-    
-    if config['interactive_mode'] == 'yes':
-        logger.warning('Go back to OS HOME menu to continue...')
-        time.sleep(2)
-        pixelcolor1_old = (255, 255, 255)
-        pixelcolor2_old = (255, 255, 255)
-        while True:
-            img = bgd_capture.getIM().crop((1036, 550, 1195, 708))
-            pixelcolor1 = img.getpixel((35, 63))
-            pixelcolor2 = img.getpixel((84, 110))
-            if (pixelcolor1 == pixelcolor1_old and pixelcolor2 == pixelcolor2_old) \
-                or pixelcolor1_old == (255, 255, 255):
-                pixelcolor1_old = pixelcolor1
-                pixelcolor2_old = pixelcolor2
-                continue
-            time.sleep(3)
-            ser.write(b'^') 
-            time.sleep(20)
-            break
+    g_lastRestart = int(time.monotonic())
 
-    #soc.sendall(b'HOME')
-    for _ in range(14):
-        trigger_action(ser, 'A')
-        time.sleep(0.25)
-    time.sleep(5)
-    #we need this dynamic determination because the loading screen after a disconnect
-    #varies. We continue only after confirming the character is at the door outside of the
-    #airport.
-    logger.info('Waiting for evacuation from the airport...')
-    
-    # See if the screen lights up again
-    while True:
-        img = bgd_capture.getIM().crop((625, 305, 630, 310)) \
-            .convert('L').point(lambda x: 255 if x > 30 else 0, mode='1')
-        pixelcolor1 = img.getpixel((1, 1))
-        pixelcolor2 = img.getpixel((2, 2))
-        if pixelcolor1 == 0 and pixelcolor2 == 0:
-            time.sleep(0.1)
-            continue
-        break
-    
-    # Okay the screen lit up. But are we really outside of the airport?
-    # In case of persistent network issue, there will be additonal pop up at OS level.
-    # Therefore we seek for the frame of the mini map here to make sure 
-    # that we are still within the game
-    time.sleep(5)
-    # This is to resolve the occasional color flickering from the capture card.
-    # Basically we try a few more times before concluding the arrival of the flight
-    diffColorCount = 0
-    while True:
-        img = bgd_capture.getIM().crop((990,550,993,700))
-        pixelcolor1 = img.getpixel((0,0))
-        pixelcolor2 = img.getpixel((0,50))
-        pixelcolor3 = img.getpixel((0,100))
-        pixelcolor4 = img.getpixel((0,149))
-        color_ref = (254, 251, 230)
-        if not isSimilarColor(pixelcolor1,color_ref) \
-            == isSimilarColor(pixelcolor2,color_ref) \
-            == isSimilarColor(pixelcolor3,color_ref) \
-            == isSimilarColor(pixelcolor4,color_ref) \
-            == True:
-            diffColorCount += 1
-            time.sleep(1)
-            if diffColorCount <= 5:
-                logger.debug('Mini-map not found at the airport. Flickering?')
-                continue
-            else:
-                logger.critical('Character is lost in the airport. Exiting to prevent further damage...')
-                sys.exit(0)
-        break
+    thresh = 170
+    fn = lambda x: 255 if x > thresh else 0
 
-    # Reload the command list file so that any changes can be adopted without a restart
-    command_list_g1.clear()
-    command_list_g4.clear()
-    command_list_g5.clear()
+    #Preload g4 so that the exit handler can hand over the controller back
     with open(os.sep.join([os.path.dirname(os.path.realpath(__file__)),'reopen_island_command_v1.txt']), 'r') as command_file:
         for command_line in command_file:
             group, action, strDuration = command_line.replace('\n', '').split(',')
             actionlist = action.split('&&')
             command_struc = (actionlist, float(strDuration))
-            if group == '1':
-                command_list_g1.append(command_struc)
-            elif group == '4':
+            if group == '4':
                 command_list_g4.append(command_struc) #release the controller
-            elif group == '5':
-                command_list_g5.append(command_struc)
-    # Check the connection again here before getting back into the airport
-    while(True):
-        logger.debug('Checking internet connection again...')
-        if hasInternet():
-            break
-        else:
-            logger.debug('No internet connection. Try again in 30 seconds.')
-            time.sleep(30)
-    
-    logger.debug('Starting g1.')
-    for action, duration in command_list_g1:
-        trigger_action(ser, *action, sec=duration)
-    
-    # Attendant will be preparing ACNH server connection after g1...
-    # We need to separate g5 from g1, as sometimes the connection to ACNH server
-    # takes extra time which leads to failure due to action sequence getting out of sync.
-    logger.debug('Waiting for ACNH server connection...')
-    bConnectionReady = False
-    iRetryCounter = 0
-    while bConnectionReady == False:
-        img = bgd_capture.getIM().crop((286, 519, 625, 570))
+
+    ser = serial.Serial(config['COM_PORT'], 9600, timeout=0,bytesize=8, stopbits=1)
+    logger.info('<COM port opened.>')
+    if config['interactive_mode'] == 'no':
+        ser.write(b'^') 
+        time.sleep(20)
+
+        g_sysTime = datetime.datetime.strptime(getSysTime(), '%H:%M')
+        g_sysTimeMono = int(time.monotonic())
+        g_islandUpdateInterval = 3600
+
+        # display the actual (US Eastern) time of store closure at program start
+        timeDelta = g_sysTime.replace(hour=23, minute=00) - g_sysTime
+        logger.info('Store will be closing at (US Eastern): ' + \
+            (datetime.datetime.now() + timeDelta).strftime(r'%Y-%m-%d %H:%M'))
+        if config['DODOApp_enabled'] == 'yes' and config['DODOApp_use_API'] == 'yes':
+            expTime = str(calendar.timegm((datetime.datetime.now(datetime.timezone.utc) + timeDelta).timetuple())) + '513'
+            xcx_adapter.updateIsland(expireTime=expTime)
+
+    while True:
+        #img = bgd_capture.getIM().crop((1060,100,1100,101))
+        #pixelcolor1 = img.getpixel((0,0))
+        #pixelcolor2 = img.getpixel((35,0))
+        #if not (pixelcolor1 == (162, 152, 114) and pixelcolor2 == (155, 143, 104)):
+        #print(str(time.ctime()),'Detecting network error message...')
+        if config['interactive_mode'] == 'no' and \
+            (config['quanquan_enabled'] == 'yes' or config['DODOApp_enabled'] == 'yes'):
+            #calculate the current switch system time by applying offset to the 
+            #original system time captured on start up. This is to avoid expensive capture and OCR
+            timeDelta = g_sysTime.replace(hour=23, minute=00) - \
+                (g_sysTime + datetime.timedelta(seconds=(int(time.monotonic()) - g_sysTimeMono)))
+            if 300 < timeDelta.total_seconds() <= 1200:
+                g_islandUpdateInterval = 300
+            elif timeDelta.total_seconds() <= 300:
+                g_islandUpdateInterval = 60
+            if (int(time.monotonic()) - g_lastRestart) > g_islandUpdateInterval:
+                #skip island refresh if the shop is closing in 1 hr
+                if timeDelta.total_seconds() >= 3600:
+                    if isinstance(xcx_adapter,cl_quanquan_cap):
+                        xcx_adapter.updateIsland() 
+                if timeDelta.total_seconds() > 60:
+                    hour, second = divmod(timeDelta.total_seconds(), 3600)
+                    minute, second = divmod(second, 60)
+                    strTime = (f'{int(hour)}小时' if hour != 0 else '') + \
+                        (f'{int(minute)}分钟' if minute != 0 else '')
+                    xcx_adapter.sendMsg(f'[喵] 本岛商店将于{strTime}后结束营业。')
+                    g_lastRestart = int(time.monotonic())
+                else:
+                    for action, duration in command_list_g4:
+                        trigger_action(ser, *action, sec=duration)
+                    xcx_adapter.closeIsland()
+        bgd_capture.showWindow()
+        time.sleep(0.2)
+        img_full = bgd_capture.getIM()
+        img = img_full.crop((1036, 550, 1195, 708))
+        # filename_tmp = os.sep.join([config['CAP_DIR'],'test','cap_flip_' + str(int(time.time())) + '.jpg'])
+        # img.save(filename_tmp)
+        pixelcolor1 = img.getpixel((35, 63))
+        pixelcolor2 = img.getpixel((84, 110))
+        color_ref1 = (51, 50, 51)
+        color_ref2 = (34, 141, 197)
+        if isSimilarColor(pixelcolor1,color_ref1) and isSimilarColor(pixelcolor2,color_ref2):
+            time.sleep(5) #wait for the flipping anime
+            img = bgd_capture.getIM().crop((360, 271, 1191, 367)).convert('L').point(fn, mode='1')
+            filename = os.sep.join([config['CAP_DIR'],'visitors','cap_visitor_' + str(int(time.time())) + '.jpg'])
+            img.save(filename)
+            strPlayerName = getOCR(filename)
+            strPlayerName = strPlayerName if strPlayerName is not None else ''
+            logger.info('New Visitor: ' + strPlayerName)
+            if config['quanquan_announce_traffic'] == 'yes':
+                l_t1 = time.monotonic()
+                xcx_adapter.sendMsg(u'[喵] 侦测到进港航班：' + strPlayerName + u' （飞行中会“正忙”，请稍候...)')
+
+            # This is to resolve the occasional color flickering from the capture card.
+            # Basically we try a few more times before concluding the arrival of the flight
+            diffColorCount = 0
+            while True:
+                img = bgd_capture.getIM().crop((1036, 550, 1195, 708))
+                pixelcolor1 = img.getpixel((35, 63))
+                pixelcolor2 = img.getpixel((84, 110))
+                color_ref1 = (51, 50, 51)
+                color_ref2 = (34, 141, 197)
+                if isSimilarColor(pixelcolor1,color_ref1) and isSimilarColor(pixelcolor2,color_ref2):
+                    diffColorCount = 0
+                    time.sleep(2)
+                    continue
+                else:
+                    diffColorCount += 1
+                    time.sleep(0.5)
+                    if diffColorCount <= 3:
+                        continue
+                
+                # filename_tmp = os.sep.join([config['CAP_DIR'],'test','cap_flip_' + str(int(time.time())) + '.jpg'])
+                # img.save(filename_tmp)
+
+                if config['quanquan_announce_traffic'] == 'yes':
+                    xcx_adapter.sendMsg(u'[喵] ' + strPlayerName + u' 已落地，用时'
+                        + str(int(time.monotonic() - l_t1) + 5) + u'秒。下一位旅客请尝试登机')
+                # this is to avoid the next main iteration captures prematurely the fading animation
+                # of the airport flip board after the flight arrival
+                time.sleep(2)
+                break
+        #"Network Error" within ACNH
         cv2_img = cv2.cvtColor(numpy.array(img), cv2.COLOR_BGR2GRAY)
+        #this is for the other type of "connection error" as an OS msgbox
+        cv2_img2 = cv2.cvtColor(
+            numpy.array(img_full.crop((555 - 15, 360 - 15, 555 + 156 + 15, 360 + 34 + 15))), cv2.COLOR_BGR2GRAY)
         img_ref = cv2.cvtColor(
-            cv2.imread(os.sep.join([os.path.dirname(os.path.realpath(__file__)),'ref_img','txtAirportHowToInvite.jpg'])), cv2.COLOR_BGR2GRAY)
-        res = cv2.matchTemplate(cv2_img, img_ref, cv2.TM_CCOEFF_NORMED)
+            cv2.imread(os.sep.join([os.path.dirname(os.path.realpath(__file__)),'ref_img','txtDisconn.jpg'])), cv2.COLOR_BGR2GRAY)
+        res = cv2.matchTemplate(cv2_img2, img_ref, cv2.TM_CCOEFF_NORMED)
         threshold = 0.95
         loc = numpy.where(res >= threshold)
+        isDisconnected = False
         for pt in zip(*loc[::-1]):
-            logger.debug('ACNH server connection established.')
-            bConnectionReady = True
+            isDisconnected = True
             break
-        iRetryCounter += 1
-        if iRetryCounter >= 300:
-            logger.critical('ACNH server connection seems broken... Exiting...')
+        if ssim(img_disconnect, cv2_img) < 0.8 and not isDisconnected:
+            #time.sleep(5)
+            #img = bgd_capture.getIM().crop((544,523,757,669)).convert('L').point(fn, mode='1')
+            img = bgd_capture.getIM().crop((500, 523, 790, 669))
+            cv2_img = cv2.cvtColor(numpy.array(img), cv2.COLOR_BGR2GRAY)
+            img_ref = cv2.cvtColor(
+                cv2.imread(os.sep.join([os.path.dirname(os.path.realpath(__file__)),'ref_img','txtBack.jpg'])), cv2.COLOR_BGR2GRAY)
+            res = cv2.matchTemplate(cv2_img, img_ref, cv2.TM_CCOEFF_NORMED)
+            threshold = 0.95
+            loc = numpy.where(res >= threshold)
+            for pt in zip(*loc[::-1]):
+                #just one box is enough...so just return...
+                #cv2.imwrite(os.sep.join([config['CAP_DIR'],'test','cap_back_' + str(int(time.time())) + '.jpg']),cv2_img)
+                filename = os.sep.join([config['CAP_DIR'],'test','cap_back_' + str(int(time.time())) + '.jpg'])
+                img.crop((0, 0, 290, 40)).convert('L').point(lambda x: 255 if x > 110 else 0, mode='1').save(filename)
+                strPlayerName = getOCR(filename)
+                strPlayerName = strPlayerName if strPlayerName is not None else ''
+                logger.info('Departing: ' + strPlayerName)
+                if config['quanquan_announce_traffic'] == 'yes':
+                    if strPlayerName.replace(' ','') == '':
+                        xcx_adapter.sendMsg(u'[喵] 有人离岛啦~跑太快没看清>__<...唔...')
+                    else:
+                        xcx_adapter.sendMsg(u'[喵] ' + strPlayerName + u' 离岛啦~ （离境过程中会短暂“正忙”)')
+                time.sleep(5)#to avoid capturing the same message
+                break
+            continue
+        
+        logger.error('Connection terminated from ACNH server!!!')
+        while(True):
+            logger.debug('Checking internet connection...')
+            if hasInternet():
+                break
+            else:
+                logger.debug('No internet connection. Try again in 30 seconds.')
+                time.sleep(30)
+
+        if (config['quanquan_enabled'] == 'yes' or config['DODOApp_enabled'] == 'yes'):
+            xcx_adapter.sendMsg(u'[喵] 炸啦~炸啦~岛炸啦~~密码失效啦~~飞奔向机场重开ing...')
+        
+        if config['interactive_mode'] == 'yes':
+            logger.warning('Go back to OS HOME menu to continue...')
+            time.sleep(2)
+            pixelcolor1_old = (255, 255, 255)
+            pixelcolor2_old = (255, 255, 255)
+            while True:
+                img = bgd_capture.getIM().crop((1036, 550, 1195, 708))
+                pixelcolor1 = img.getpixel((35, 63))
+                pixelcolor2 = img.getpixel((84, 110))
+                if (pixelcolor1 == pixelcolor1_old and pixelcolor2 == pixelcolor2_old) \
+                    or pixelcolor1_old == (255, 255, 255):
+                    pixelcolor1_old = pixelcolor1
+                    pixelcolor2_old = pixelcolor2
+                    continue
+                time.sleep(3)
+                ser.write(b'^') 
+                time.sleep(20)
+                break
+
+        #soc.sendall(b'HOME')
+        for _ in range(14):
+            trigger_action(ser, 'A')
+            time.sleep(0.25)
+        time.sleep(5)
+        #we need this dynamic determination because the loading screen after a disconnect
+        #varies. We continue only after confirming the character is at the door outside of the
+        #airport.
+        logger.info('Waiting for evacuation from the airport...')
+        
+        # See if the screen lights up again
+        while True:
+            img = bgd_capture.getIM().crop((625, 305, 630, 310)) \
+                .convert('L').point(lambda x: 255 if x > 30 else 0, mode='1')
+            pixelcolor1 = img.getpixel((1, 1))
+            pixelcolor2 = img.getpixel((2, 2))
+            if pixelcolor1 == 0 and pixelcolor2 == 0:
+                time.sleep(0.1)
+                continue
+            break
+        
+        # Okay the screen lit up. But are we really outside of the airport?
+        # In case of persistent network issue, there will be additonal pop up at OS level.
+        # Therefore we seek for the frame of the mini map here to make sure 
+        # that we are still within the game
+        time.sleep(5)
+        # This is to resolve the occasional color flickering from the capture card.
+        # Basically we try a few more times before concluding the arrival of the flight
+        diffColorCount = 0
+        while True:
+            img = bgd_capture.getIM().crop((990,550,993,700))
+            pixelcolor1 = img.getpixel((0,0))
+            pixelcolor2 = img.getpixel((0,50))
+            pixelcolor3 = img.getpixel((0,100))
+            pixelcolor4 = img.getpixel((0,149))
+            color_ref = (254, 251, 230)
+            if not isSimilarColor(pixelcolor1,color_ref) \
+                == isSimilarColor(pixelcolor2,color_ref) \
+                == isSimilarColor(pixelcolor3,color_ref) \
+                == isSimilarColor(pixelcolor4,color_ref) \
+                == True:
+                diffColorCount += 1
+                time.sleep(1)
+                if diffColorCount <= 5:
+                    logger.debug('Mini-map not found at the airport. Flickering?')
+                    continue
+                else:
+                    logger.critical('Character is lost in the airport. Exiting to prevent further damage...')
+                    sys.exit(0)
+            break
+
+        # Reload the command list file so that any changes can be adopted without a restart
+        command_list_g1.clear()
+        command_list_g4.clear()
+        command_list_g5.clear()
+        with open(os.sep.join([os.path.dirname(os.path.realpath(__file__)),'reopen_island_command_v1.txt']), 'r') as command_file:
+            for command_line in command_file:
+                group, action, strDuration = command_line.replace('\n', '').split(',')
+                actionlist = action.split('&&')
+                command_struc = (actionlist, float(strDuration))
+                if group == '1':
+                    command_list_g1.append(command_struc)
+                elif group == '4':
+                    command_list_g4.append(command_struc) #release the controller
+                elif group == '5':
+                    command_list_g5.append(command_struc)
+        # Check the connection again here before getting back into the airport
+        while(True):
+            logger.debug('Checking internet connection again...')
+            if hasInternet():
+                break
+            else:
+                logger.debug('No internet connection. Try again in 30 seconds.')
+                time.sleep(30)
+        
+        logger.debug('Starting g1.')
+        for action, duration in command_list_g1:
+            trigger_action(ser, *action, sec=duration)
+        
+        # Attendant will be preparing ACNH server connection after g1...
+        # We need to separate g5 from g1, as sometimes the connection to ACNH server
+        # takes extra time which leads to failure due to action sequence getting out of sync.
+        logger.debug('Waiting for ACNH server connection...')
+        bConnectionReady = False
+        iRetryCounter = 0
+        while bConnectionReady == False:
+            img = bgd_capture.getIM().crop((286, 519, 625, 570))
+            cv2_img = cv2.cvtColor(numpy.array(img), cv2.COLOR_BGR2GRAY)
+            img_ref = cv2.cvtColor(
+                cv2.imread(os.sep.join([os.path.dirname(os.path.realpath(__file__)),'ref_img','txtAirportHowToInvite.jpg'])), cv2.COLOR_BGR2GRAY)
+            res = cv2.matchTemplate(cv2_img, img_ref, cv2.TM_CCOEFF_NORMED)
+            threshold = 0.95
+            loc = numpy.where(res >= threshold)
+            for pt in zip(*loc[::-1]):
+                logger.debug('ACNH server connection established.')
+                bConnectionReady = True
+                break
+            iRetryCounter += 1
+            if iRetryCounter >= 300:
+                logger.critical('ACNH server connection seems broken... Exiting...')
+                for action, duration in command_list_g4:
+                    trigger_action(ser, *action, sec=duration)
+                if (config['quanquan_enabled'] == 'yes' or config['DODOApp_enabled'] == 'yes'):
+                    xcx_adapter.closeIsland()
+                sys.exit(0)
+            time.sleep(1)
+        logger.debug('Starting g5.')
+        for action, duration in command_list_g5:
+            trigger_action(ser, *action, sec=duration)        
+        
+        img = bgd_capture.getIM().crop((300, 520, 520, 620)).convert('L').point(fn, mode='1')
+        logger.info('DODO code captured.')
+        img = img.crop((0, 50, 220, 100))
+        text = pytesseract.image_to_string(img, lang='dodo',config=tessdata_dir_config)
+        logger.debug('Original OCR:' + str(text))
+        body = text + '\r\n'
+        #text = re.compile(r'(“+|”+|"+|\s+)').sub('', text)
+        text = re.compile(r'([^a-zA-Z0-9])').sub('', text)
+        #text = text.replace(' ', '').replace('“', '').replace('”', '').replace('"', '')
+        
+        filename = os.sep.join([config['CAP_DIR'],'cap_new_island_pwd_'+ str(int(time.time())) + '.jpg'])
+        img.save(filename) 
+        
+        if len(text) != 5:
+            logger.warning('Local OCR failed. Falling back to Baidu OCR.')
+            text = re.compile(r'([^a-zA-Z0-9])').sub('', getOCR(filename,'ENG').replace('O','0'))
+            logger.debug('Calibrated Baidu OCR output:' + text)
+            body = body + 'Local OCR failed. Falling back to Baidu OCR.'
+
+        body = str(time.ctime()) + '\r\n' + body + text
+
+        attachment_path_list = []
+        attachment_path_list.append(filename)
+        sendMail(config['new_code_maillist'], 'New DODO Code for Your Island', body, attachment_path_list)
+
+        if len(text) != 5:
+            #we will be here only if both tesseract and Baidu gave wrong OCR result
+            logger.critical('Incorrect length detected with DODOCode!!!')
             for action, duration in command_list_g4:
                 trigger_action(ser, *action, sec=duration)
             if (config['quanquan_enabled'] == 'yes' or config['DODOApp_enabled'] == 'yes'):
                 xcx_adapter.closeIsland()
             sys.exit(0)
-        time.sleep(1)
-    logger.debug('Starting g5.')
-    for action, duration in command_list_g5:
-        trigger_action(ser, *action, sec=duration)        
-    
-    img = bgd_capture.getIM().crop((300, 520, 520, 620)).convert('L').point(fn, mode='1')
-    logger.info('DODO code captured.')
-    img = img.crop((0, 50, 220, 100))
-    text = pytesseract.image_to_string(img, lang='dodo',config=tessdata_dir_config)
-    logger.debug('Original OCR:' + str(text))
-    body = text + '\r\n'
-    #text = re.compile(r'(“+|”+|"+|\s+)').sub('', text)
-    text = re.compile(r'([^a-zA-Z0-9])').sub('', text)
-    #text = text.replace(' ', '').replace('“', '').replace('”', '').replace('"', '')
-    
-    filename = os.sep.join([config['CAP_DIR'],'cap_new_island_pwd_'+ str(int(time.time())) + '.jpg'])
-    img.save(filename) 
-    
-    if len(text) != 5:
-        logger.warning('Local OCR failed. Falling back to Baidu OCR.')
-        text = re.compile(r'([^a-zA-Z0-9])').sub('', getOCR(filename,'ENG').replace('O','0'))
-        logger.debug('Calibrated Baidu OCR output:' + text)
-        body = body + 'Local OCR failed. Falling back to Baidu OCR.'
+        else:
+            if (config['quanquan_enabled'] == 'yes' or config['DODOApp_enabled'] == 'yes'):
+                xcx_adapter.updateIsland(newDODO=text)
+                xcx_adapter.sendMsg(u'[喵] 呼...机场已恢复开放~请刷新页面获取最新密码~（趴...')
 
-    body = str(time.ctime()) + '\r\n' + body + text
+        for _ in range(14):
+            trigger_action(ser, 'B')
+            time.sleep(0.25)
+        logger.info('Gate Reopened.')
+        #now leave the airport and head to the chair
+        trigger_action(ser, 'L_LEFT', sec=0.9)
+        trigger_action(ser, 'L_DOWN', sec=2.5)
+        time.sleep(10)
+        trigger_action(ser, 'L_LEFT', sec=0.32)
+        trigger_action(ser, 'L_UP', sec=7)
+        trigger_action(ser, 'L_RIGHT', sec=0.52)
+        trigger_action(ser, 'L_UP', sec=5)
 
-    attachment_path_list = []
-    attachment_path_list.append(filename)
-    sendMail(config['new_code_maillist'], 'New DODO Code for Your Island', body, attachment_path_list)
+        if config['interactive_mode'] == 'yes':
+            logger.info('Interactive mode enabled. Giving back controller...')
+            for action, duration in command_list_g4:
+                trigger_action(ser, *action, sec=duration)
 
-    if len(text) != 5:
-        #we will be here only if both tesseract and Baidu gave wrong OCR result
-        logger.critical('Incorrect length detected with DODOCode!!!')
-        for action, duration in command_list_g4:
-            trigger_action(ser, *action, sec=duration)
-        if (config['quanquan_enabled'] == 'yes' or config['DODOApp_enabled'] == 'yes'):
-            xcx_adapter.closeIsland()
-        sys.exit(0)
-    else:
-        if (config['quanquan_enabled'] == 'yes' or config['DODOApp_enabled'] == 'yes'):
-            xcx_adapter.updateIsland(newDODO=text)
-            xcx_adapter.sendMsg(u'[喵] 呼...机场已恢复开放~请刷新页面获取最新密码~（趴...')
-
-    for _ in range(14):
-        trigger_action(ser, 'B')
-        time.sleep(0.25)
-    logger.info('Gate Reopened.')
-    #now leave the airport and head to the chair
-    trigger_action(ser, 'L_LEFT', sec=0.9)
-    trigger_action(ser, 'L_DOWN', sec=2.5)
-    time.sleep(10)
-    trigger_action(ser, 'L_LEFT', sec=0.32)
-    trigger_action(ser, 'L_UP', sec=7)
-    trigger_action(ser, 'L_RIGHT', sec=0.52)
-    trigger_action(ser, 'L_UP', sec=5)
-
-    if config['interactive_mode'] == 'yes':
-        logger.info('Interactive mode enabled. Giving back controller...')
-        for action, duration in command_list_g4:
-            trigger_action(ser, *action, sec=duration)
-
-    time.sleep(30)
-    bgd_capture.showWindow()
+        time.sleep(30)
+        bgd_capture.showWindow()
