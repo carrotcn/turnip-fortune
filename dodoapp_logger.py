@@ -128,11 +128,28 @@ def dodoapp_island_queue_logger(config,xcx_adapter):
                     island_queue.pop(user)
         time.sleep(20)
 
-# logger = logging.getLogger('__main__')
-# logger.setLevel(logging.DEBUG)
-# ch1 = logging.StreamHandler()
-# ch1.setLevel(logging.DEBUG)
-# formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-# ch1.setFormatter(formatter)
-# logger.addHandler(ch1)
+def getConfig():
+    config_main = configparser.ConfigParser()
+    config_main.read(os.sep.join([os.path.dirname(os.path.realpath(__file__)),'acnh_config.ini']))
+    if config_main.has_section('REOPEN_ISLAND'):
+        return config_main['REOPEN_ISLAND']
+    else:
+        logger = logging.getLogger('__main__')
+        logger.error('acnh_config.ini not found!!! Exiting...')
+        sys.exit(0)
 
+if __name__ ==  '__main__':
+    logger = logging.getLogger('__main__')
+    logger.setLevel(logging.DEBUG)
+    # create console handler and set level to debug
+    ch1 = logging.StreamHandler()
+    ch1.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    # add formatter to ch
+    ch1.setFormatter(formatter)
+    # add ch to logger
+    logger.addHandler(ch1)
+    
+    config = getConfig()
+    xcx_adapter = DODOApp_API(config=config)
+    dodoapp_island_queue_logger(config, xcx_adapter)

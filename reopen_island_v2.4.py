@@ -438,6 +438,9 @@ def getConfig():
 def cchandler(signal_received, frame):
     # Handle any cleanup here
     logger.info('SIGINT or CTRL-C detected. Giving back controller...')
+    for key, value in proc:
+        if value.is_alive():
+            value.terminate()
     for action, duration in command_list_g4:
         trigger_action(ser, *action, sec=duration)
     exit(0)
@@ -575,6 +578,7 @@ if __name__ ==  '__main__':
     img_disconnect = cv2.cvtColor(img_disconnect, cv2.COLOR_BGR2GRAY)
 
     bgd_capture = cl_bgd_cap()
+    proc = {}
 
     if config['quanquan_enabled'] == 'yes' and config['DODOApp_enabled'] == 'yes':
         logger.critical('xcx quanquan and DODOApp cannot be enabled together!!!')
@@ -585,7 +589,7 @@ if __name__ ==  '__main__':
     elif config['DODOApp_enabled'] == 'yes':
         if config['DODOApp_use_API'] == 'yes':
             xcx_adapter = DODOApp_API(config=config)
-            multiprocessing.Process(target=dodoapp_island_queue_logger, args=(config,xcx_adapter,), daemon=True).start()
+            proc['dodoapp_queue_logger'] = multiprocessing.Process(target=dodoapp_island_queue_logger, args=(config,xcx_adapter,), daemon=True).start()
         else:
             xcx_adapter = cl_DODOApp_cap()
 
@@ -664,6 +668,16 @@ if __name__ ==  '__main__':
         color_ref1 = (51, 50, 51)
         color_ref2 = (34, 141, 197)
         if isSimilarColor(pixelcolor1,color_ref1) and isSimilarColor(pixelcolor2,color_ref2):
+            # This is not really related to incoming flights,
+            # but rather just find an infrequently triggered spot 
+            # to bring the logger back up if terminated for some reason.
+            if 'dodoapp_queue_logger' in proc.keys():
+                if not proc['dodoapp_queue_logger'].is_alive():
+                    proc['dodoapp_queue_logger'] = multiprocessing.Process(
+                        target=dodoapp_island_queue_logger, 
+                        args=(config,xcx_adapter,), 
+                        daemon=True).start()
+            
             time.sleep(5) #wait for the flipping anime
             img = bgd_capture.getIM().crop((360, 271, 1191, 367)).convert('L').point(fn, mode='1')
             filename = os.sep.join([config['CAP_DIR'],'visitors','cap_visitor_' + str(int(time.time())) + '.jpg'])
