@@ -589,7 +589,8 @@ if __name__ ==  '__main__':
     elif config['DODOApp_enabled'] == 'yes':
         if config['DODOApp_use_API'] == 'yes':
             xcx_adapter = DODOApp_API(config=config)
-            proc['dodoapp_queue_logger'] = multiprocessing.Process(target=dodoapp_island_queue_logger, args=(config,xcx_adapter,), daemon=True).start()
+            proc['dodoapp_queue_logger'] = multiprocessing.Process(target=dodoapp_island_queue_logger, args=(config,xcx_adapter,), daemon=True)
+            proc['dodoapp_queue_logger'].start()
         else:
             xcx_adapter = cl_DODOApp_cap()
 
@@ -676,7 +677,8 @@ if __name__ ==  '__main__':
                     proc['dodoapp_queue_logger'] = multiprocessing.Process(
                         target=dodoapp_island_queue_logger, 
                         args=(config,xcx_adapter,), 
-                        daemon=True).start()
+                        daemon=True)
+                    proc['dodoapp_queue_logger'].start()
             
             time.sleep(5) #wait for the flipping anime
             img = bgd_capture.getIM().crop((360, 271, 1191, 367)).convert('L').point(fn, mode='1')
