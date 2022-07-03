@@ -118,14 +118,16 @@ def dodoapp_island_queue_logger(config,xcx_adapter):
             for index, user in enumerate(sorted_queue):
                 current_queue_list.append(user.id)
                 dodoapp_current_queue_file.write(f'{index + 1}: {user.nickName} - {user.gameNickName}\n')
-                if user.id not in island_queue.keys():
-                    qclogger.info('[+] ' + f'{user.nickName} - {user.gameNickName} - Rank: {user.rank}')
-                island_queue[user.id] = user #ADD for new user, UPDATE for existing user (e.g., rank)
             # Here we create a copy of the original keys list. Otherwise the pop() will change the length of the list and cause exception
             for user in list(island_queue.keys()):
                 if user not in current_queue_list:
                     qclogger.info('[-] ' + f'{island_queue[user].nickName} - {island_queue[user].gameNickName} - Rank: {island_queue[user].rank}')
                     island_queue.pop(user)
+            # New users are logged after departing users
+            for index, user in enumerate(sorted_queue):
+                if user.id not in island_queue.keys():
+                    qclogger.info('[+] ' + f'{user.nickName} - {user.gameNickName} - Rank: {user.rank}')
+                island_queue[user.id] = user #ADD for new user, UPDATE for existing user (e.g., rank)
         time.sleep(20)
 
 def getConfig():

@@ -438,7 +438,7 @@ def getConfig():
 def cchandler(signal_received, frame):
     # Handle any cleanup here
     logger.info('SIGINT or CTRL-C detected. Giving back controller...')
-    for key, value in proc:
+    for key, value in proc.items():
         if value.is_alive():
             value.terminate()
     for action, duration in command_list_g4:
@@ -679,6 +679,7 @@ if __name__ ==  '__main__':
                         args=(config,xcx_adapter,), 
                         daemon=True)
                     proc['dodoapp_queue_logger'].start()
+                    logger.debug('DODOApp logger restarted')
             
             time.sleep(5) #wait for the flipping anime
             img = bgd_capture.getIM().crop((360, 271, 1191, 367)).convert('L').point(fn, mode='1')
