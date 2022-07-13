@@ -201,7 +201,7 @@ time.sleep(20)
 img = bgd_capture.getIM().crop((300, 520, 520, 620)).convert('L').point(fn, mode='1')
 logger.info('DODO code captured.')
 img = img.crop((0, 50, 220, 100))
-text = pytesseract.image_to_string(img, lang='dodo',config=tessdata_dir_config)
+text = pytesseract.image_to_string(img, lang='acnh_dodo2',config=tessdata_dir_config)
 logger.debug('Original OCR:' + str(text))
 body = text + '\r\n'
 #text = re.compile(r'(“+|”+|"+|\s+)').sub('', text)
