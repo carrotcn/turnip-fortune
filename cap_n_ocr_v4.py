@@ -29,6 +29,8 @@ from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
+import cv2, numpy
+
 from colormath.color_objects import sRGBColor, LabColor
 from colormath.color_conversions import convert_color
 from colormath.color_diff import delta_e_cie2000
@@ -275,10 +277,6 @@ while(True):
                     winsound.Beep(3200, 5000)
                     #pullPlug()
 
-                    #release the control for other controllers to connect
-                    for action,duration in command_list_g4:
-                        trigger_action(ser,*action,sec=duration)
-
                     attachment_path_list = []
                     attachment_path_list.append(filename)
                     sendMail(config['DEV_MAIL_RECIPIENT'],'Turnip Price@'+strPrice,str(time.ctime()),attachment_path_list)
@@ -291,6 +289,100 @@ while(True):
                     config_temp['DODOApp']['island_price'] = strPrice
                     with open(os.sep.join([os.path.dirname(os.path.realpath(__file__)),'dodoapp_local_config.ini']), 'w') as configfile:
                         config_temp.write(configfile)
+
+                    #finish the conversation
+                    for _ in range(15):
+                        trigger_action(ser,'B')
+                        time.sleep(0.25)
+                    time.sleep(2)
+                    #walk out of the store
+                    trigger_action(ser, 'L_DOWN', sec=2.5)
+                    for _ in range(15):
+                        trigger_action(ser,'B')
+                        time.sleep(0.25)
+                    while True:
+                        #seek for the frame of the mini map 
+                        img = bgd_capture.getIM().crop((990,550,993,700))
+                        pixelcolor1 = img.getpixel((0,0))
+                        pixelcolor2 = img.getpixel((0,50))
+                        pixelcolor3 = img.getpixel((0,100))
+                        pixelcolor4 = img.getpixel((0,149))
+                        color_ref = (254, 251, 230)
+                        # print(str(pixelcolor1) + str(isSimilarColor(pixelcolor1,color_ref)))
+                        # print(str(pixelcolor2) + str(isSimilarColor(pixelcolor2,color_ref)))
+                        # print(str(pixelcolor3) + str(isSimilarColor(pixelcolor3,color_ref)))
+                        # print(str(pixelcolor4) + str(isSimilarColor(pixelcolor4,color_ref)))
+                        
+                        if not isSimilarColor(pixelcolor1,color_ref) \
+                            == isSimilarColor(pixelcolor2,color_ref) \
+                            == isSimilarColor(pixelcolor3,color_ref) \
+                            == isSimilarColor(pixelcolor4,color_ref) \
+                            == True:
+                            time.sleep(0.25)
+                        else:
+                            break
+                    trigger_action(ser, 'L_DOWN', sec=0.3)
+                    trigger_action(ser, 'L_RIGHT', sec=0.4)
+                    trigger_action(ser,'X')
+                    time.sleep(2)
+                    #reposition cursor to #1 slot in bag
+                    trigger_action(ser, 'L_DOWN', sec=2)
+                    trigger_action(ser, 'L_LEFT')
+                    trigger_action(ser, 'L_UP', sec=2)
+                    time.sleep(1)
+                    is_cursor_on_van = False
+                    for _ in range(4):
+                        for _ in range(10):
+                            img = bgd_capture.getIM().crop((220, 80, 1030, 530))
+                            cv2_img = cv2.cvtColor(numpy.array(img), cv2.COLOR_BGR2GRAY)
+                            img_ref = cv2.cvtColor(
+                                cv2.imread(os.sep.join([os.path.dirname(os.path.realpath(__file__)),'ref_img','txtVan.jpg'])), cv2.COLOR_BGR2GRAY)
+                            res = cv2.matchTemplate(cv2_img, img_ref, cv2.TM_CCOEFF_NORMED)
+                            threshold = 0.95
+                            loc = numpy.where(res >= threshold)
+                            for pt in zip(*loc[::-1]):
+                                #deploy van on the ground
+                                is_cursor_on_van = True
+                                trigger_action(ser,'A')
+                                time.sleep(1)
+                                trigger_action(ser,'A')
+                                break        
+                            if is_cursor_on_van:
+                                break
+                            trigger_action(ser,'L_RIGHT')
+                            time.sleep(0.5)
+                        if is_cursor_on_van:
+                            break
+                        trigger_action(ser,'L_DOWN')
+                        time.sleep(0.5)
+
+                    time.sleep(2)
+                    img = bgd_capture.getIM().crop((50,80,1230,740))
+                    #img.save(os.sep.join([config['CAP_DIR'],'cap_succ_' + str(int(time.time())) + '.jpg']))
+                    filename = os.sep.join([config['CAP_DIR'],'cap_van_' + str(int(time.time())) + '.jpg'])
+                    img.save(filename)
+                    
+                    # send a screenshot after deploying the van, so that if the position is good,
+                    # open_island program can be triggered right after.
+                    attachment_path_list = []
+                    attachment_path_list.append(filename)
+                    sendMail(config['DEV_MAIL_RECIPIENT'],'Van Position Check',str(time.ctime()),attachment_path_list)
+                    
+                    for _ in range(3):
+                        trigger_action(ser,'L_LEFT', sec=1)
+                        trigger_action(ser,'L_DOWN', sec=5)    
+                    for _ in range(3):
+                        trigger_action(ser,'L_LEFT', sec=1)
+                        trigger_action(ser,'L_RIGHT', sec=0.2)
+                        trigger_action(ser,'L_DOWN', sec=5)    
+
+                    trigger_action(ser,'L_LEFT', sec=3)
+                    trigger_action(ser,'L_RIGHT', sec=0.6)
+                    trigger_action(ser,'L_UP', sec=0.3)
+
+                    #release the control for other controllers to connect
+                    for action,duration in command_list_g4:
+                        trigger_action(ser,*action,sec=duration)
                     
                     bgd_capture.close()
                     sys.exit(0)
