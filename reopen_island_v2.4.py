@@ -52,6 +52,8 @@ from bgd_cap import cl_bgd_cap
 from dodoapp_api import DODOApp_API
 from dodoapp_logger import dodoapp_island_queue_logger
 
+from io import BytesIO
+
 class cl_xcx_cap:
     def __init__(self):
         self.hwnd = None
@@ -906,7 +908,15 @@ if __name__ ==  '__main__':
         img = bgd_capture.getIM().crop((300, 520, 520, 620)).convert('L').point(fn, mode='1')
         logger.info('DODO code captured.')
         img = img.crop((0, 50, 220, 100))
-        text = pytesseract.image_to_string(img, lang='acnh_dodo2',config=tessdata_dir_config)
+        # Here we need an in-memory image file from BytesIO, as the tesseract acnh_dodo2
+        # is trained with sample .jpg files previously saved from the program with default
+        # quality of 75(%). If we use straightly the img object instead of the in-memory image file,
+        # tesseract will give wrong OCR result under certain circumstances, due to the quality of
+        # the img object being different (higher).
+        vfile = BytesIO()
+        img.save(vfile,format='jpeg')
+        text = pytesseract.image_to_string(vfile, lang='acnh_dodo2',config=tessdata_dir_config)
+        vfile.close()
         logger.debug('Original OCR:' + str(text))
         body = text + '\r\n'
         #text = re.compile(r'(“+|”+|"+|\s+)').sub('', text)
