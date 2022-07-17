@@ -338,7 +338,8 @@ while(True):
                             img_ref = cv2.cvtColor(
                                 cv2.imread(os.sep.join([os.path.dirname(os.path.realpath(__file__)),'ref_img','txtVan.jpg'])), cv2.COLOR_BGR2GRAY)
                             res = cv2.matchTemplate(cv2_img, img_ref, cv2.TM_CCOEFF_NORMED)
-                            threshold = 0.95
+                            print(res.max())
+                            threshold = 0.90
                             loc = numpy.where(res >= threshold)
                             for pt in zip(*loc[::-1]):
                                 #deploy van on the ground
