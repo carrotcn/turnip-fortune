@@ -250,7 +250,7 @@ img = img.crop((0, 50, 220, 100))
 # the img object being different (higher).
 vfile = BytesIO()
 img.save(vfile,format='jpeg')
-text = pytesseract.image_to_string(Image.open(vfile), lang='acnh_dodo2',config=tessdata_dir_config)
+text = pytesseract.image_to_string(Image.open(vfile), lang='acnh_dodo4',config=tessdata_dir_config)
 vfile.close()
 logger.debug('Original OCR:' + str(text))
 body = text + '\r\n'
