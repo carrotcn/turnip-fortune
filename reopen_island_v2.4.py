@@ -927,10 +927,12 @@ if __name__ ==  '__main__':
         img.save(filename) 
         
         if len(text) != 5:
-            logger.warning('Local OCR failed. Falling back to Baidu OCR.')
-            text = re.compile(r'([^a-zA-Z0-9])').sub('', getOCR(filename,'ENG').replace('O','0'))
-            logger.debug('Calibrated Baidu OCR output:' + text)
-            body = body + 'Local OCR failed. Falling back to Baidu OCR.'
+            logger.warning('LSTM OCR failed. Falling back to legacy OCR model.')
+            # text = re.compile(r'([^a-zA-Z0-9])').sub('', getOCR(filename,'ENG').replace('O','0'))
+            # logger.debug('Calibrated legacy OCR output:' + text)
+            text = pytesseract.image_to_string(Image.open(filename), lang='acnh_dodo4',config=tessdata_dir_config)
+            text = re.compile(r'([^a-zA-Z0-9])').sub('', text)
+            body = body + 'LSTM OCR failed. Falling back to legacy OCR model.'
 
         body = str(time.ctime()) + '\r\n' + body + text
 
