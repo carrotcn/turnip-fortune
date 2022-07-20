@@ -930,7 +930,7 @@ if __name__ ==  '__main__':
             logger.warning('LSTM OCR failed. Falling back to legacy OCR model.')
             # text = re.compile(r'([^a-zA-Z0-9])').sub('', getOCR(filename,'ENG').replace('O','0'))
             # logger.debug('Calibrated legacy OCR output:' + text)
-            text = pytesseract.image_to_string(Image.open(filename), lang='acnh_dodo4',config=tessdata_dir_config)
+            text = pytesseract.image_to_string(Image.open(filename), lang='dodo_o2',config=tessdata_dir_config)
             text = re.compile(r'([^a-zA-Z0-9])').sub('', text)
             body = body + 'LSTM OCR failed. Falling back to legacy OCR model.'
 
