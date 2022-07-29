@@ -36,11 +36,15 @@ def sendRequest(url, method = 'get', data = None, headers = None, files = None, 
                 break
         else:
             pass
-        
-    if resp is not None and resp.status_code == 200:
-        pass
-    else:
-        logger.error(f'[ERROR] HTTP {str(resp.status_code)}')
+    
+    if not 'resp' in locals():
+        resp = None
+
+    if resp is not None:
+        if resp.status_code == 200:
+            pass
+        else:
+            logger.error(f'[ERROR] HTTP {str(resp.status_code)}')
     
     return resp
 
